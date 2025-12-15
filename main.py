@@ -20,12 +20,11 @@ async def say(ctx, *, mensaje: str):
         await ctx.send(mensaje)
     except discord.Forbidden:
         await ctx.send("❌ No tengo permisos para borrar mensajes o enviar mensajes aquí.", delete_after=5)
-    except Exception as e:
-        await ctx.send(f"❌ Error: {e}", delete_after=5)
 
 @bot.event
 async def on_ready():
     print("Success: Bot is connected to Discord")
 
 webserver.keep_alive()
+
 bot.run(DISCORD_TOKEN)
