@@ -34,6 +34,8 @@ venv.bak/
 *.sqlite
 *.sqlite3
 
+MONGODB_URI=mongodb+srv://discordbot:miContraseñaSegura@cluster0.mongodb.net/?retryWrites=true&w=majority
+
 # Archivos del sistema
 .DS_Store
 Thumbs.db
