@@ -6,16 +6,6 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 import webserver
 import asyncio
 
-@bot.command(aliases=["decir", "hablar"], name='say', help='Envía un mensaje y borra el comando original.')
-async def say(ctx, *, mensaje: str):
-    try:
-        # Borrar el mensaje del usuario
-        await ctx.message.delete()
-        # Enviar el mensaje
-        await ctx.send(mensaje)
-    except discord.Forbidden:
-        await ctx.send("❌ No tengo permisos para borrar mensajes o enviar mensajes aquí.", delete_after=5)
-
 #----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
 #----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
 #----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
@@ -37,6 +27,7 @@ intents.members = True
 # Crear bot con prefijo
 bot = commands.Bot(command_prefix='t!', intents=intents)
 
+
 # Evento cuando el bot está listo
 @bot.event
 async def on_ready():
@@ -45,6 +36,16 @@ async def on_ready():
     
     # Cambiar estado del bot
     await bot.change_presence(activity=discord.Game(name="!mochila"))
+
+@bot.command(aliases=["decir", "hablar"], name='say', help='Envía un mensaje y borra el comando original.')
+async def say(ctx, *, mensaje: str):
+    try:
+        # Borrar el mensaje del usuario
+        await ctx.message.delete()
+        # Enviar el mensaje
+        await ctx.send(mensaje)
+    except discord.Forbidden:
+        await ctx.send("❌ No tengo permisos para borrar mensajes o enviar mensajes aquí.", delete_after=5)
 
 # Manejo de errores
 @bot.event
@@ -104,5 +105,6 @@ async def on_ready():
 webserver.keep_alive()
 
 bot.run(DISCORD_TOKEN)
+
 
 
