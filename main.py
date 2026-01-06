@@ -18,7 +18,7 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = commands.Bot(command_prefix="t!", intents=intents)
+bot = commands.Bot(command_prefix="t!", intents=intents, help_command=None)
 
 # ========== CONEXIÓN A MONGODB ATLAS ==========
 class MongoDB:
@@ -1185,6 +1185,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
