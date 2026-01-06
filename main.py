@@ -21,12 +21,6 @@ import os
 from dotenv import load_dotenv
 import asyncio
 
-# Cargar variables de entorno
-load_dotenv()
-    
-    # Cambiar estado del bot
-    await bot.change_presence(activity=discord.Game(name="!mochila"))
-
 @bot.command(aliases=["decir", "hablar"], name='say', help='Envía un mensaje y borra el comando original.')
 async def say(ctx, *, mensaje: str):
     try:
@@ -95,6 +89,7 @@ async def on_ready():
 webserver.keep_alive()
 
 bot.run(DISCORD_TOKEN)
+
 
 
 
