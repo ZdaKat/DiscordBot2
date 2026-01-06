@@ -2285,6 +2285,1152 @@ async def help_command(ctx, comando: str = None):
         
         await ctx.send(embed=embed)
 
+
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+# ========== COMANDOS DE ADMINISTRADOR ==========
+@bot.command(name='admin', aliases=['administrador', 'mod'])
+@commands.has_permissions(administrator=True)
+async def admin_command(ctx, action: str = None, *, args: str = None):
+    """Panel de administración del juego - Solo administradores"""
+    
+    if not action:
+        await show_admin_help(ctx)
+        return
+    
+    action = action.lower()
+    
+    if action == "help":
+        await show_admin_help(ctx)
+    elif action == "addchar":
+        await admin_add_character(ctx, args)
+    elif action == "removechar":
+        await admin_remove_character(ctx, args)
+    elif action == "givecoins":
+        await admin_give_coins(ctx, args)
+    elif action == "resetuser":
+        await admin_reset_user(ctx, args)
+    elif action == "resetall":
+        await admin_reset_all(ctx)
+    elif action == "resetcounters":
+        await admin_reset_counters(ctx)
+    elif action == "revive":
+        await admin_revive_user(ctx, args)
+    elif action == "sethealth":
+        await admin_set_health(ctx, args)
+    elif action == "setcoins":
+        await admin_set_coins(ctx, args)
+    elif action == "kill":
+        await admin_kill_user(ctx, args)
+    elif action == "inspect":
+        await admin_inspect_user(ctx, args)
+    elif action == "listusers":
+        await admin_list_users(ctx)
+    elif action == "stats":
+        await admin_game_stats(ctx)
+    else:
+        await ctx.send("❌ Acción no válida. Usa `t!admin help` para ver opciones.")
+
+async def show_admin_help(ctx):
+    """Muestra la ayuda de administración"""
+    embed = discord.Embed(
+        title="🔧 Panel de Administración del Juego",
+        description="**Solo administradores pueden usar estos comandos**",
+        color=discord.Color.red()
+    )
+    
+    embed.add_field(
+        name="👥 **Gestión de Usuarios**",
+        value="`addchar <@usuario> <personaje>` - Añadir personaje\n"
+              "`removechar <@usuario> <personaje>` - Quitar personaje\n"
+              "`resetuser <@usuario>` - Resetear usuario\n"
+              "`revive <@usuario>` - Revivir usuario\n"
+              "`kill <@usuario>` - Matar usuario\n"
+              "`inspect <@usuario>` - Inspeccionar usuario",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="💰 **Gestión de Recursos**",
+        value="`givecoins <@usuario> <cantidad>` - Dar monedas\n"
+              "`setcoins <@usuario> <cantidad>` - Establecer monedas\n"
+              "`sethealth <@usuario> <cantidad>` - Establecer vida",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🔄 **Sistema Global**",
+        value="`resetall` - Resetear TODOS los usuarios\n"
+              "`resetcounters` - Reiniciar contadores diarios\n"
+              "`listusers` - Listar todos los usuarios\n"
+              "`stats` - Estadísticas del juego",
+        inline=False
+    )
+    
+    embed.set_footer(text="⚠️ Estos comandos pueden afectar permanentemente el progreso de los jugadores")
+    await ctx.send(embed=embed)
+
+async def admin_add_character(ctx, args: str):
+    """Añade un personaje específico a un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin addchar <@usuario> <nombre_personaje>`")
+        return
+    
+    # Parsear argumentos: mencion y nombre del personaje
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin addchar <@usuario> <nombre_personaje>`")
+        return
+    
+    # Intentar obtener el usuario mencionado
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    character_name = " ".join(parts[1:])
+    
+    # Verificar si el personaje existe
+    if character_name not in ALL_CHARACTERS:
+        # Buscar por coincidencia parcial
+        found_characters = []
+        for char_name in ALL_CHARACTERS.keys():
+            if character_name.lower() in char_name.lower():
+                found_characters.append(char_name)
+        
+        if not found_characters:
+            await ctx.send(f"❌ Personaje '{character_name}' no encontrado")
+            return
+        
+        if len(found_characters) > 1:
+            # Mostrar opciones
+            embed = discord.Embed(
+                title="🔍 Personajes encontrados",
+                description=f"Se encontraron {len(found_characters)} personajes que coinciden:",
+                color=discord.Color.blue()
+            )
+            
+            for i, char in enumerate(found_characters[:10], 1):
+                embed.add_field(name=f"{i}. {char}", value=ALL_CHARACTERS[char].rarity.value, inline=False)
+            
+            embed.set_footer(text="Usa el nombre completo del personaje")
+            await ctx.send(embed=embed)
+            return
+        
+        character_name = found_characters[0]
+    
+    # Obtener datos del jugador
+    player = db.get_player(user.id)
+    
+    if not player:
+        # Crear jugador si no existe
+        # Usar el primer personaje inicial como predeterminado
+        starter_char = list(STARTER_CHARACTERS.keys())[0]
+        db.create_player(user.id, user.name, starter_char)
+        player = db.get_player(user.id)
+    
+    # Verificar si ya tiene el personaje
+    for char in player.get("unlocked_characters", []):
+        if char["name"] == character_name:
+            await ctx.send(f"❌ {user.display_name} ya tiene el personaje **{character_name}**")
+            return
+    
+    # Desbloquear personaje
+    result = db.unlock_character(user.id, character_name)
+    
+    if result:
+        character = ALL_CHARACTERS[character_name]
+        
+        embed = discord.Embed(
+            title="✅ Personaje añadido",
+            description=f"**{character_name}** añadido a {user.mention}",
+            color=discord.Color.green()
+        )
+        
+        embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+        embed.add_field(name="🎭 Personaje", value=character_name, inline=True)
+        embed.add_field(name="⭐ Rareza", value=character.rarity.value, inline=True)
+        
+        if character.special_effect:
+            embed.add_field(name="✨ Efecto", value=character.special_effect, inline=False)
+        
+        embed.add_field(name="❤️ Vida", value=f"{character.max_hp} HP", inline=True)
+        embed.add_field(name="⚔️ Daño", value=f"{character.min_damage}-{character.max_damage}", inline=True)
+        
+        embed.set_footer(text=f"Añadido por {ctx.author.display_name}")
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("❌ Error al añadir el personaje")
+
+async def admin_remove_character(ctx, args: str):
+    """Quita un personaje específico de un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin removechar <@usuario> <nombre_personaje>`")
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin removechar <@usuario> <nombre_personaje>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    character_name = " ".join(parts[1:])
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    # Buscar el personaje
+    character_found = False
+    character_index = -1
+    
+    for i, char in enumerate(player.get("unlocked_characters", [])):
+        if char["name"].lower() == character_name.lower():
+            character_found = True
+            character_index = i
+            break
+    
+    if not character_found:
+        # Buscar por coincidencia parcial
+        for i, char in enumerate(player.get("unlocked_characters", [])):
+            if character_name.lower() in char["name"].lower():
+                character_found = True
+                character_index = i
+                character_name = char["name"]
+                break
+    
+    if not character_found:
+        await ctx.send(f"❌ {user.display_name} no tiene el personaje **{character_name}**")
+        return
+    
+    # Verificar si es el personaje actual
+    if player["current_character"] == character_name:
+        await ctx.send(f"❌ No puedes quitar el personaje actual de {user.display_name}. Cambia primero con `t!game switch`")
+        return
+    
+    # Quitar personaje
+    updated_chars = player["unlocked_characters"].copy()
+    removed_char = updated_chars.pop(character_index)
+    
+    db.update_player(user.id, {
+        "unlocked_characters": updated_chars,
+        "characters_unlocked": max(0, player.get("characters_unlocked", 1) - 1)
+    })
+    
+    embed = discord.Embed(
+        title="❌ Personaje removido",
+        description=f"**{character_name}** removido de {user.mention}",
+        color=discord.Color.orange()
+    )
+    
+    embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+    embed.add_field(name="🎭 Personaje", value=character_name, inline=True)
+    embed.add_field(name="⭐ Rareza", value=removed_char.get("rarity", "Desconocida"), inline=True)
+    
+    embed.set_footer(text=f"Removido por {ctx.author.display_name}")
+    await ctx.send(embed=embed)
+
+async def admin_give_coins(ctx, args: str):
+    """Da monedas a un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin givecoins <@usuario> <cantidad>`")
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin givecoins <@usuario> <cantidad>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    try:
+        amount = int(parts[1])
+        if amount <= 0:
+            await ctx.send("❌ La cantidad debe ser mayor a 0")
+            return
+    except ValueError:
+        await ctx.send("❌ La cantidad debe ser un número válido")
+        return
+    
+    # Verificar límite razonable
+    if amount > 1000000:
+        await ctx.send("❌ Cantidad demasiado alta. Máximo 1,000,000 monedas")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        # Crear jugador si no existe
+        starter_char = list(STARTER_CHARACTERS.keys())[0]
+        db.create_player(user.id, user.name, starter_char)
+        player = db.get_player(user.id)
+    
+    result = db.add_coins(user.id, amount)
+    
+    if result:
+        embed = discord.Embed(
+            title="💰 Monedas añadidas",
+            description=f"Se añadieron **{amount} monedas** a {user.mention}",
+            color=discord.Color.gold()
+        )
+        
+        embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+        embed.add_field(name="💸 Cantidad", value=f"+{amount} monedas", inline=True)
+        embed.add_field(name="💰 Total", value=f"{result['coins']} monedas", inline=True)
+        
+        embed.set_footer(text=f"Añadido por {ctx.author.display_name}")
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("❌ Error al añadir monedas")
+
+async def admin_reset_user(ctx, args: str):
+    """Resetea completamente un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin resetuser <@usuario>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, args)
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    # Pedir confirmación
+    embed = discord.Embed(
+        title="⚠️ ¿Resetear usuario?",
+        description=f"Estás a punto de resetear completamente a **{user.display_name}**.\n\n"
+                   f"**Esto eliminará:**\n• Todos los personajes desbloqueados\n• Todas las monedas\n• Todas las estadísticas\n\n"
+                   f"⚠️ **¡Esta acción NO se puede deshacer!**",
+        color=discord.Color.red()
+    )
+    
+    embed.add_field(name="👤 Usuario", value=user.mention, inline=True)
+    embed.add_field(name="🎭 Personaje actual", value=player["current_character"], inline=True)
+    embed.add_field(name="💰 Monedas", value=f"{player['coins']}", inline=True)
+    embed.add_field(name="👥 Personajes", value=f"{player.get('characters_unlocked', 1)}", inline=True)
+    embed.add_field(name="👹 Monstruos", value=f"{player.get('monsters_defeated', 0)}", inline=True)
+    
+    confirm_msg = await ctx.send(embed=embed)
+    
+    # Agregar reacciones para confirmar
+    await confirm_msg.add_reaction("✅")
+    await confirm_msg.add_reaction("❌")
+    
+    # Esperar confirmación
+    def check(reaction, reactor):
+        return reactor == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+    
+    try:
+        reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+        
+        if str(reaction.emoji) == "✅":
+            # Eliminar jugador de la base de datos
+            db.players.delete_one({"discord_id": str(user.id)})
+            
+            # Crear nuevo jugador con personaje inicial predeterminado
+            starter_char = list(STARTER_CHARACTERS.keys())[0]
+            db.create_player(user.id, user.name, starter_char)
+            
+            embed = discord.Embed(
+                title="✅ Usuario reseteado",
+                description=f"**{user.display_name}** ha sido reseteado completamente.\nAhora tiene el personaje inicial **{starter_char}**.",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(name="👤 Usuario", value=user.mention, inline=True)
+            embed.add_field(name="🎭 Nuevo personaje", value=starter_char, inline=True)
+            
+            await confirm_msg.edit(embed=embed)
+            await confirm_msg.clear_reactions()
+            
+        else:
+            await confirm_msg.edit(content="❌ Reset cancelado", embed=None)
+            await confirm_msg.clear_reactions()
+            
+    except asyncio.TimeoutError:
+        await confirm_msg.edit(content="⏰ Tiempo de confirmación agotado", embed=None)
+        await confirm_msg.clear_reactions()
+
+async def admin_reset_all(ctx):
+    """Resetea TODOS los usuarios (¡PELIGROSO!)"""
+    # Pedir confirmación EXTREMA
+    embed = discord.Embed(
+        title="☠️ ¡¡¡RESETEO TOTAL!!!",
+        description="**ESTÁS A PUNTO DE RESETEAR A TODOS LOS USUARIOS**\n\n"
+                   f"Esto afectará a **{db.players.count_documents({})} jugadores**.\n\n"
+                   "**Se perderá permanentemente:**\n"
+                   "• Todos los personajes desbloqueados\n"
+                   "• Todas las monedas\n"
+                   "• Todas las estadísticas\n"
+                   "• Todo el progreso\n\n"
+                   "⚠️ **¡¡¡ESTA ACCIÓN NO SE PUEDE DESHACER!!!**",
+        color=discord.Color.dark_red()
+    )
+    
+    embed.set_footer(text="Escribe 'RESET TOTAL' para confirmar (tienes 30 segundos)")
+    await ctx.send(embed=embed)
+    
+    # Esperar confirmación específica
+    def check(message):
+        return message.author == ctx.author and message.content == "RESET TOTAL"
+    
+    try:
+        await bot.wait_for('message', timeout=30.0, check=check)
+        
+        # Obtener conteo antes del reset
+        total_players = db.players.count_documents({})
+        
+        # Eliminar TODOS los jugadores
+        result = db.players.delete_many({})
+        
+        embed = discord.Embed(
+            title="☠️ ¡RESETEO COMPLETADO!",
+            description=f"Se han eliminado **{result.deleted_count} jugadores** de la base de datos.\n\n"
+                       "Todos los usuarios deberán usar `t!game start` nuevamente.",
+            color=discord.Color.dark_purple()
+        )
+        
+        embed.add_field(name="👥 Jugadores afectados", value=f"{result.deleted_count}", inline=True)
+        
+        await ctx.send(embed=embed)
+        
+    except asyncio.TimeoutError:
+        await ctx.send("⏰ Tiempo de confirmación agotado. Reset cancelado.")
+
+async def admin_reset_counters(ctx):
+    """Reinicia los contadores diarios para todos los usuarios"""
+    # Pedir confirmación
+    total_players = db.players.count_documents({})
+    
+    embed = discord.Embed(
+        title="🔄 ¿Reiniciar contadores diarios?",
+        description=f"Esto reiniciará los contadores diarios para **{total_players} jugadores**.\n\n"
+                   "**Se reseteará:**\n• Usos de daily (5/5)\n• Uso de sdaily (disponible)\n\n"
+                   "¿Continuar?",
+        color=discord.Color.orange()
+    )
+    
+    confirm_msg = await ctx.send(embed=embed)
+    await confirm_msg.add_reaction("✅")
+    await confirm_msg.add_reaction("❌")
+    
+    def check(reaction, reactor):
+        return reactor == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+    
+    try:
+        reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+        
+        if str(reaction.emoji) == "✅":
+            db.reset_daily_uses()
+            
+            embed = discord.Embed(
+                title="✅ Contadores reiniciados",
+                description=f"Se han reiniciado los contadores diarios para **{total_players} jugadores**.",
+                color=discord.Color.green()
+            )
+            
+            await confirm_msg.edit(embed=embed)
+            await confirm_msg.clear_reactions()
+            
+        else:
+            await confirm_msg.edit(content="❌ Operación cancelada", embed=None)
+            await confirm_msg.clear_reactions()
+            
+    except asyncio.TimeoutError:
+        await confirm_msg.edit(content="⏰ Tiempo agotado", embed=None)
+        await confirm_msg.clear_reactions()
+
+async def admin_revive_user(ctx, args: str):
+    """Revive a un usuario manualmente"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin revive <@usuario>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, args)
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    if not player["is_dead"]:
+        await ctx.send(f"❌ {user.display_name} no está muerto")
+        return
+    
+    # Revivir usuario
+    result = db.revive_player(user.id)
+    
+    if result:
+        embed = discord.Embed(
+            title="✨ Usuario revivido",
+            description=f"{user.mention} ha sido revivido manualmente.",
+            color=discord.Color.green()
+        )
+        
+        embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+        embed.add_field(name="❤️ Vida", value=f"{result['character_stats']['current_hp']}/{result['character_stats']['max_hp']}", inline=True)
+        embed.add_field(name="🎭 Personaje", value=result["current_character"], inline=True)
+        
+        embed.set_footer(text=f"Revivido por {ctx.author.display_name}")
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("❌ Error al revivir al usuario")
+
+async def admin_set_health(ctx, args: str):
+    """Establece la vida de un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin sethealth <@usuario> <cantidad>`")
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin sethealth <@usuario> <cantidad>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    try:
+        health = int(parts[1])
+        if health < 0:
+            await ctx.send("❌ La vida no puede ser negativa")
+            return
+    except ValueError:
+        await ctx.send("❌ La cantidad debe ser un número válido")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    max_hp = player["character_stats"]["max_hp"]
+    new_health = min(health, max_hp)  # No exceder la vida máxima
+    
+    # Actualizar vida
+    db.update_player(user.id, {
+        "character_stats.current_hp": new_health
+    })
+    
+    # También actualizar en unlocked_characters
+    updated_chars = []
+    for char in player.get("unlocked_characters", []):
+        char_copy = char.copy()
+        if char["name"] == player["current_character"]:
+            char_copy["current_hp"] = new_health
+        updated_chars.append(char_copy)
+    
+    db.update_player(user.id, {"unlocked_characters": updated_chars})
+    
+    embed = discord.Embed(
+        title="❤️ Vida establecida",
+        description=f"Vida de {user.mention} establecida a **{new_health}**",
+        color=discord.Color.green()
+    )
+    
+    embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+    embed.add_field(name="❤️ Vida anterior", value=f"{player['character_stats']['current_hp']}/{max_hp}", inline=True)
+    embed.add_field(name="❤️ Vida nueva", value=f"{new_health}/{max_hp}", inline=True)
+    
+    if new_health == 0:
+        embed.add_field(name="💀 Estado", value="El usuario ahora está muerto", inline=False)
+    
+    await ctx.send(embed=embed)
+
+async def admin_set_coins(ctx, args: str):
+    """Establece las monedas de un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin setcoins <@usuario> <cantidad>`")
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin setcoins <@usuario> <cantidad>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    try:
+        coins = int(parts[1])
+        if coins < 0:
+            await ctx.send("❌ Las monedas no pueden ser negativas")
+            return
+    except ValueError:
+        await ctx.send("❌ La cantidad debe ser un número válido")
+        return
+    
+    # Verificar límite razonable
+    if coins > 10000000:
+        await ctx.send("❌ Cantidad demasiado alta. Máximo 10,000,000 monedas")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        # Crear jugador si no existe
+        starter_char = list(STARTER_CHARACTERS.keys())[0]
+        db.create_player(user.id, user.name, starter_char)
+        player = db.get_player(user.id)
+    
+    # Establecer monedas
+    db.update_player(user.id, {"coins": coins})
+    
+    embed = discord.Embed(
+        title="💰 Monedas establecidas",
+        description=f"Monedas de {user.mention} establecidas a **{coins}**",
+        color=discord.Color.gold()
+    )
+    
+    embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+    embed.add_field(name="💰 Monedas anteriores", value=f"{player['coins']}", inline=True)
+    embed.add_field(name="💰 Monedas nuevas", value=f"{coins}", inline=True)
+    
+    await ctx.send(embed=embed)
+
+async def admin_kill_user(ctx, args: str):
+    """Mata a un usuario manualmente"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin kill <@usuario>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, args)
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    if player["is_dead"]:
+        await ctx.send(f"❌ {user.display_name} ya está muerto")
+        return
+    
+    # Pedir confirmación
+    embed = discord.Embed(
+        title="💀 ¿Matar usuario?",
+        description=f"Estás a punto de matar a **{user.display_name}**.\n\n"
+                   f"**Esto:**\n• Establecerá su vida a 0\n• Lo marcará como muerto\n• Deberá esperar 48 horas para revivir\n\n"
+                   f"¿Continuar?",
+        color=discord.Color.dark_red()
+    )
+    
+    confirm_msg = await ctx.send(embed=embed)
+    await confirm_msg.add_reaction("✅")
+    await confirm_msg.add_reaction("❌")
+    
+    def check(reaction, reactor):
+        return reactor == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+    
+    try:
+        reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+        
+        if str(reaction.emoji) == "✅":
+            # Matar usuario
+            result = db.kill_player(user.id)
+            
+            embed = discord.Embed(
+                title="💀 Usuario eliminado",
+                description=f"{user.mention} ha sido eliminado.\n\n"
+                           f"**Tiempo para revivir:** 48 horas",
+                color=discord.Color.dark_grey()
+            )
+            
+            embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+            embed.add_field(name="⏰ Hora de muerte", value=datetime.utcnow().strftime("%H:%M:%S"), inline=True)
+            embed.add_field(name="📅 Revivir el", value=(datetime.utcnow() + timedelta(days=2)).strftime("%d/%m/%Y %H:%M"), inline=False)
+            
+            await confirm_msg.edit(embed=embed)
+            await confirm_msg.clear_reactions()
+            
+        else:
+            await confirm_msg.edit(content="❌ Operación cancelada", embed=None)
+            await confirm_msg.clear_reactions()
+            
+    except asyncio.TimeoutError:
+        await confirm_msg.edit(content="⏰ Tiempo agotado", embed=None)
+        await confirm_msg.clear_reactions()
+
+async def admin_inspect_user(ctx, args: str):
+    """Inspecciona los datos completos de un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin inspect <@usuario>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, args)
+    except:
+        # Intentar por ID
+        try:
+            user_id = int(args)
+            user = await bot.fetch_user(user_id)
+        except:
+            await ctx.send("❌ No se pudo encontrar el usuario")
+            return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    # Crear embed detallado
+    embed = discord.Embed(
+        title=f"🔍 Inspección de {user.display_name}",
+        color=discord.Color.blue()
+    )
+    
+    # Información básica
+    embed.add_field(name="👤 Usuario", value=f"{user.mention}\nID: {user.id}", inline=False)
+    embed.add_field(name="💀 Estado", value="MUERTO" if player["is_dead"] else "VIVO", inline=True)
+    embed.add_field(name="🎭 Personaje actual", value=player["current_character"], inline=True)
+    
+    # Estadísticas
+    char_stats = player["character_stats"]
+    embed.add_field(name="❤️ Vida", value=f"{char_stats['current_hp']}/{char_stats['max_hp']}", inline=True)
+    embed.add_field(name="⚔️ Daño", value=f"{char_stats['min_damage']}-{char_stats['max_damage']}", inline=True)
+    embed.add_field(name="💰 Monedas", value=f"{player['coins']}", inline=True)
+    
+    # Progreso
+    embed.add_field(name="👹 Monstruos derrotados", value=f"{player.get('monsters_defeated', 0)}", inline=True)
+    embed.add_field(name="💥 Daño total", value=f"{player.get('total_damage_dealt', 0)}", inline=True)
+    embed.add_field(name="👥 Personajes desbloqueados", value=f"{player.get('characters_unlocked', 1)}", inline=True)
+    
+    # Contadores diarios
+    embed.add_field(name="📅 Daily usados", value=f"{player['daily_uses_today']}/5", inline=True)
+    embed.add_field(name="🌟 Sdaily usado", value="✅" if player["sdaily_used_today"] else "❌", inline=True)
+    
+    # Fechas importantes
+    created = player["created_at"].strftime("%d/%m/%Y %H:%M") if isinstance(player["created_at"], datetime) else str(player["created_at"])
+    embed.add_field(name="📅 Creado el", value=created, inline=True)
+    
+    last_active = player["last_active"].strftime("%d/%m/%Y %H:%M") if isinstance(player["last_active"], datetime) else str(player["last_active"])
+    embed.add_field(name="🕒 Última actividad", value=last_active, inline=True)
+    
+    if player["is_dead"] and player.get("death_time"):
+        death_time = player["death_time"].strftime("%d/%m/%Y %H:%M") if isinstance(player["death_time"], datetime) else str(player["death_time"])
+        embed.add_field(name="💀 Hora de muerte", value=death_time, inline=True)
+    
+    # Lista de personajes
+    unlocked_chars = player.get("unlocked_characters", [])
+    if unlocked_chars:
+        chars_by_rarity = {}
+        for char in unlocked_chars:
+            rarity = char.get("rarity", "Desconocida")
+            if rarity not in chars_by_rarity:
+                chars_by_rarity[rarity] = []
+            chars_by_rarity[rarity].append(char["name"])
+        
+        chars_text = []
+        for rarity, chars in chars_by_rarity.items():
+            chars_text.append(f"**{rarity}:** {', '.join(chars[:3])}" + ("..." if len(chars) > 3 else ""))
+        
+        embed.add_field(
+            name="🎭 Personajes desbloqueados",
+            value="\n".join(chars_text) if chars_text else "Ninguno",
+            inline=False
+        )
+    
+    await ctx.send(embed=embed)
+
+async def admin_list_users(ctx):
+    """Lista todos los usuarios del juego"""
+    try:
+        players = list(db.players.find().sort("created_at", -1).limit(50))
+        
+        if not players:
+            await ctx.send("❌ No hay usuarios registrados en el juego")
+            return
+        
+        total_players = db.players.count_documents({})
+        alive_players = db.players.count_documents({"is_dead": False})
+        dead_players = db.players.count_documents({"is_dead": True})
+        
+        embed = discord.Embed(
+            title="📋 Lista de Usuarios",
+            description=f"Mostrando {len(players)} de {total_players} usuarios",
+            color=discord.Color.blue()
+        )
+        
+        # Estadísticas
+        embed.add_field(name="👥 Total", value=str(total_players), inline=True)
+        embed.add_field(name="❤️ Vivos", value=str(alive_players), inline=True)
+        embed.add_field(name="💀 Muertos", value=str(dead_players), inline=True)
+        
+        # Lista de usuarios
+        users_text = []
+        for i, player in enumerate(players[:25], 1):  # Mostrar primeros 25
+            status = "💀" if player["is_dead"] else "❤️"
+            users_text.append(f"{i}. {status} **{player['username']}** - {player['coins']}💰 - {player.get('characters_unlocked', 1)}👥")
+        
+        if users_text:
+            embed.add_field(
+                name="👤 Usuarios",
+                value="\n".join(users_text),
+                inline=False
+            )
+        
+        # Si hay más de 25, mostrar en otra página
+        if len(players) > 25:
+            users_text2 = []
+            for i, player in enumerate(players[25:50], 26):
+                status = "💀" if player["is_dead"] else "❤️"
+                users_text2.append(f"{i}. {status} **{player['username']}** - {player['coins']}💰")
+            
+            if users_text2:
+                embed.add_field(
+                    name="👤 Usuarios (cont.)",
+                    value="\n".join(users_text2),
+                    inline=False
+                )
+        
+        embed.set_footer(text=f"Total: {total_players} usuarios | Usa t!admin inspect <@usuario> para más detalles")
+        await ctx.send(embed=embed)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error al obtener la lista de usuarios: {str(e)}")
+
+async def admin_game_stats(ctx):
+    """Muestra estadísticas detalladas del juego"""
+    try:
+        # Estadísticas generales
+        total_players = db.players.count_documents({})
+        alive_players = db.players.count_documents({"is_dead": False})
+        dead_players = db.players.count_documents({"is_dead": True})
+        
+        # Monedas totales
+        pipeline_coins = [{"$group": {"_id": None, "total": {"$sum": "$coins"}}}]
+        coins_result = list(db.players.aggregate(pipeline_coins))
+        total_coins = coins_result[0]["total"] if coins_result else 0
+        
+        # Monstruos totales derrotados
+        pipeline_monsters = [{"$group": {"_id": None, "total": {"$sum": "$monsters_defeated"}}}]
+        monsters_result = list(db.players.aggregate(pipeline_monsters))
+        total_monsters = monsters_result[0]["total"] if monsters_result else 0
+        
+        # Personajes totales desbloqueados
+        pipeline_chars = [{"$group": {"_id": None, "total": {"$sum": "$characters_unlocked"}}}]
+        chars_result = list(db.players.aggregate(pipeline_chars))
+        total_chars = chars_result[0]["total"] if chars_result else 0
+        
+        # Batallas totales
+        total_battles = db.battles.count_documents({})
+        
+        # Top jugadores
+        top_coins_players = list(db.players.find().sort("coins", -1).limit(5))
+        top_monsters_players = list(db.players.find().sort("monsters_defeated", -1).limit(5))
+        
+        embed = discord.Embed(
+            title="📊 Estadísticas del Juego",
+            color=discord.Color.purple()
+        )
+        
+        # Estadísticas generales
+        embed.add_field(
+            name="📈 General",
+            value=f"**👥 Jugadores:** {total_players}\n"
+                  f"**❤️ Vivos:** {alive_players}\n"
+                  f"**💀 Muertos:** {dead_players}\n"
+                  f"**💰 Monedas totales:** {total_coins}\n"
+                  f"**👹 Monstruos derrotados:** {total_monsters}\n"
+                  f"**🎭 Personajes desbloqueados:** {total_chars}\n"
+                  f"**⚔️ Batallas registradas:** {total_battles}",
+            inline=False
+        )
+        
+        # Top por monedas
+        if top_coins_players:
+            coins_text = []
+            for i, player in enumerate(top_coins_players, 1):
+                coins_text.append(f"{i}. **{player['username']}** - {player['coins']}💰")
+            
+            embed.add_field(
+                name="💰 Top Monedas",
+                value="\n".join(coins_text),
+                inline=True
+            )
+        
+        # Top por monstruos
+        if top_monsters_players:
+            monsters_text = []
+            for i, player in enumerate(top_monsters_players, 1):
+                monsters_text.append(f"{i}. **{player['username']}** - {player.get('monsters_defeated', 0)}👹")
+            
+            embed.add_field(
+                name="👹 Top Cazadores",
+                value="\n".join(monsters_text),
+                inline=True
+            )
+        
+        # Distribución de personajes por rareza
+        embed.add_field(
+            name="🎭 Personajes Disponibles",
+            value=f"**S:** {len(S_CHARACTERS)} | **A:** {len(A_CHARACTERS)}\n"
+                  f"**B:** {len(B_CHARACTERS)} | **C:** {len(C_CHARACTERS)}\n"
+                  f"**Iniciales:** {len(STARTER_CHARACTERS)}\n"
+                  f"**Total:** {len(ALL_CHARACTERS)}",
+            inline=True
+        )
+        
+        # Base de datos
+        embed.add_field(
+            name="🗄️ Base de Datos",
+            value=f"**Colecciones:** 5\n"
+                  f"**Estado:** {'✅ Activa' if db.db is not None else '❌ Inactiva'}\n"
+                  f"**Jugadores por página:** 50",
+            inline=True
+        )
+        
+        await ctx.send(embed=embed)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error al obtener estadísticas: {str(e)}")
+
+# ========== COMANDOS DE EMERGENCIA ==========
+@bot.command(name='emergency', aliases=['emergencia'])
+@commands.has_permissions(administrator=True)
+async def emergency_command(ctx, action: str = None):
+    """Comandos de emergencia - Solo administradores"""
+    
+    if not action:
+        embed = discord.Embed(
+            title="🆘 Comandos de Emergencia",
+            description="Comandos para situaciones críticas",
+            color=discord.Color.red()
+        )
+        
+        embed.add_field(
+            name="⚠️ **Comandos Peligrosos**",
+            value="`t!emergency resetall` - Borra TODOS los datos\n"
+                  "`t!emergency cleardead` - Elimina jugadores muertos\n"
+                  "`t!emergency fixdb` - Repara la base de datos\n"
+                  "`t!emergency backup` - Crea copia de seguridad",
+            inline=False
+        )
+        
+        embed.set_footer(text="⚠️ Usar con EXTREMA precaución")
+        await ctx.send(embed=embed)
+        return
+    
+    action = action.lower()
+    
+    if action == "resetall":
+        # Confirmación EXTREMA
+        embed = discord.Embed(
+            title="☢️ ¡¡¡EMERGENCIA RESET TOTAL!!!",
+            description="**¿ESTÁS ABSOLUTAMENTE SEGURO?**\n\n"
+                       "Esto eliminará **TODO** permanentemente:\n"
+                       "• Todos los jugadores\n• Todas las estadísticas\n• Todo el progreso\n\n"
+                       "⚠️ **¡¡¡ESTO NO SE PUEDE DESHACER!!!**\n\n"
+                       "Escribe 'CONFIRMAR RESET TOTAL' para continuar",
+            color=discord.Color.dark_red()
+        )
+        
+        await ctx.send(embed=embed)
+        
+        def check(message):
+            return message.author == ctx.author and message.content == "CONFIRMAR RESET TOTAL"
+        
+        try:
+            await bot.wait_for('message', timeout=30.0, check=check)
+            
+            # Eliminar todo
+            db.players.delete_many({})
+            db.battles.delete_many({})
+            
+            embed = discord.Embed(
+                title="✅ Reset Total Completado",
+                description="**Todos los datos han sido eliminados.**\n\n"
+                           "El juego ha sido reseteado completamente.",
+                color=discord.Color.green()
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except asyncio.TimeoutError:
+            await ctx.send("⏰ Tiempo agotado. Operación cancelada.")
+    
+    elif action == "cleardead":
+        # Eliminar jugadores muertos permanentemente
+        dead_players = list(db.players.find({"is_dead": True}))
+        
+        if not dead_players:
+            await ctx.send("❌ No hay jugadores muertos para eliminar")
+            return
+        
+        embed = discord.Embed(
+            title="💀 ¿Eliminar jugadores muertos?",
+            description=f"Esto eliminará permanentemente a **{len(dead_players)} jugadores muertos**.\n\n"
+                       f"¿Continuar?",
+            color=discord.Color.dark_grey()
+        )
+        
+        confirm_msg = await ctx.send(embed=embed)
+        await confirm_msg.add_reaction("✅")
+        await confirm_msg.add_reaction("❌")
+        
+        def check(reaction, reactor):
+            return reactor == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+        
+        try:
+            reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+            
+            if str(reaction.emoji) == "✅":
+                result = db.players.delete_many({"is_dead": True})
+                
+                embed = discord.Embed(
+                    title="✅ Jugadores eliminados",
+                    description=f"Se han eliminado **{result.deleted_count} jugadores muertos**.",
+                    color=discord.Color.green()
+                )
+                
+                await confirm_msg.edit(embed=embed)
+                await confirm_msg.clear_reactions()
+                
+            else:
+                await confirm_msg.edit(content="❌ Operación cancelada", embed=None)
+                await confirm_msg.clear_reactions()
+                
+        except asyncio.TimeoutError:
+            await confirm_msg.edit(content="⏰ Tiempo agotado", embed=None)
+            await confirm_msg.clear_reactions()
+    
+    elif action == "fixdb":
+        # Reparar posibles problemas en la base de datos
+        try:
+            # Verificar conexión
+            db.client.admin.command('ping')
+            
+            # Contar documentos
+            players_count = db.players.count_documents({})
+            battles_count = db.battles.count_documents({})
+            
+            # Buscar problemas comunes
+            players_without_username = list(db.players.find({"username": {"$exists": False}}))
+            
+            embed = discord.Embed(
+                title="🔧 Reparación de Base de Datos",
+                description="Se ha realizado una verificación de la base de datos.",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(name="✅ Conexión", value="Estable", inline=True)
+            embed.add_field(name="👥 Jugadores", value=str(players_count), inline=True)
+            embed.add_field(name="⚔️ Batallas", value=str(battles_count), inline=True)
+            
+            if players_without_username:
+                embed.add_field(
+                    name="⚠️ Problemas encontrados",
+                    value=f"{len(players_without_username)} jugadores sin nombre de usuario",
+                    inline=False
+                )
+                
+                # Intentar reparar
+                for player in players_without_username:
+                    try:
+                        user = await bot.fetch_user(int(player["discord_id"]))
+                        db.players.update_one(
+                            {"_id": player["_id"]},
+                            {"$set": {"username": user.name}}
+                        )
+                    except:
+                        continue
+                
+                embed.add_field(name="🔧 Reparación", value="Intentando reparar...", inline=False)
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error al reparar base de datos: {str(e)}")
+    
+    elif action == "backup":
+        # Crear copia de seguridad
+        try:
+            players = list(db.players.find({}, {"_id": 0}))
+            battles = list(db.battles.find({}, {"_id": 0}))
+            
+            embed = discord.Embed(
+                title="💾 Copia de Seguridad",
+                description="Resumen de la copia de seguridad:",
+                color=discord.Color.blue()
+            )
+            
+            embed.add_field(name="👥 Jugadores", value=str(len(players)), inline=True)
+            embed.add_field(name="⚔️ Batallas", value=str(len(battles)), inline=True)
+            embed.add_field(name="🗓️ Fecha", value=datetime.now().strftime("%d/%m/%Y %H:%M"), inline=True)
+            
+            embed.add_field(
+                name="⚠️ Importante",
+                value="Esta es solo una vista previa. Para un backup completo, exporta directamente desde MongoDB Atlas.",
+                inline=False
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error al crear backup: {str(e)}")
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+#======================= ZONA DE ADMIN =======================================================
+
+
 # ========== EVENTOS DEL BOT ==========
 @bot.event
 async def on_ready():
@@ -2392,6 +3538,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
