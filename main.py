@@ -1170,6 +1170,28 @@ try:
 except ImportError:
     print("⚠️ No se encontró webserver.py, funcionando sin servidor web")
 
+# ========== COMANDO SAY ==========
+
+@bot.command(name='say', aliases=['decir', 'repetir'])
+@commands.has_permissions(manage_messages=True)  # Requiere permiso para gestionar mensajes
+async def say(ctx, *, mensaje: str):
+    """
+    Haz que el bot diga algo (elimina tu mensaje)
+    Uso: t!say <mensaje>
+    """
+    try:
+        # Intentar eliminar el mensaje del usuario
+        await ctx.message.delete()
+    except discord.Forbidden:
+        # Si no tiene permisos, enviar advertencia
+        await ctx.send("⚠️ No tengo permisos para eliminar mensajes.", delete_after=5)
+    except Exception as e:
+        # Otro error
+        print(f"Error al eliminar mensaje: {e}")
+    
+    # Enviar el mensaje
+    await ctx.send(mensaje)
+
 # ========== INICIAR EL BOT ==========
 if __name__ == "__main__":
     if not DISCORD_TOKEN:
@@ -1185,6 +1207,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
