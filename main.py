@@ -34,6 +34,8 @@ class MongoDB:
         print("🔗 Conectando a MongoDB Atlas...")
         try:
             self.client = MongoClient(self.connection_string)
+            # Verificar conexión
+            self.client.admin.command('ping')
             self.db = self.client.discord_bot
             self.setup_collections()
             print("✅ Conectado a MongoDB Atlas")
@@ -44,7 +46,7 @@ class MongoDB:
     
     def setup_collections(self):
         """Configura las colecciones y índices"""
-        if not self.db:
+        if self.db is None:  # CORREGIDO: Comparar con None
             return
         
         self.users = self.db.users
@@ -59,7 +61,7 @@ class MongoDB:
     # ========== MÉTODOS DE USUARIO ==========
     def get_or_create_user(self, discord_id: int, username: str):
         """Obtiene o crea un usuario en la base de datos"""
-        if not self.db:
+        if self.db is None:  # CORREGIDO: Comparar con None
             return None
         
         return self.users.find_one_and_update(
@@ -76,10 +78,12 @@ class MongoDB:
     # ========== MÉTODOS DE INVENTARIO ==========
     def add_item(self, discord_id: int, item_name: str, quantity: int = 1):
         """Añade un item al inventario del usuario"""
-        if not self.db:
+        if self.db is None:  # CORREGIDO: Comparar con None
             return {"error": "Base de datos no disponible"}
         
         user = self.get_or_create_user(discord_id, "Unknown")
+        if user is None:
+            return {"error": "No se pudo crear/obtener usuario"}
         
         # Buscar o crear el item global
         item = self.items.find_one_and_update(
@@ -116,20 +120,20 @@ class MongoDB:
     
     def remove_item(self, discord_id: int, item_identifier: str, quantity: int = 1):
         """Remueve items del inventario"""
-        if not self.db:
+        if self.db is None:  # CORREGIDO: Comparar con None
             return {"error": "Base de datos no disponible"}
         
         user_id = str(discord_id)
         
         # Buscar el item (por ID o nombre)
         item = None
-        if item_identifier.isdigit():
-            try:
+        try:
+            if item_identifier.isdigit():
                 item = self.items.find_one({"_id": ObjectId(item_identifier)})
-            except:
-                item = None
-        else:
-            item = self.items.find_one({"name_lower": item_identifier.lower()})
+            else:
+                item = self.items.find_one({"name_lower": item_identifier.lower()})
+        except:
+            item = None
         
         if not item:
             return {"error": "Item no encontrado"}
@@ -174,77 +178,93 @@ class MongoDB:
     
     def get_inventory(self, discord_id: int, page: int = 1, limit: int = 10):
         """Obtiene el inventario de un usuario con paginación"""
-        if not self.db:
+        if self.db is None:  # CORREGIDO: Comparar con None
             return {"items": [], "total_items": 0, "total_pages": 0, "current_page": 1, "limit": 10}
         
         user_id = str(discord_id)
         skip = (page - 1) * limit
         
-        total_items = self.inventories.count_documents({"user_id": user_id})
-        total_pages = max(1, (total_items + limit - 1) // limit)
-        
-        inventory_items = list(self.inventories.find(
-            {"user_id": user_id}
-        ).skip(skip).limit(limit).sort("item_name", 1))
-        
-        items_with_details = []
-        for inv_item in inventory_items:
-            item = self.items.find_one({"_id": inv_item["item_id"]})
-            if item:
-                items_with_details.append({
-                    "inventory_data": inv_item,
-                    "item_details": item
-                })
-        
-        return {
-            "items": items_with_details,
-            "total_items": total_items,
-            "total_pages": total_pages,
-            "current_page": min(page, total_pages),
-            "limit": limit
-        }
+        try:
+            total_items = self.inventories.count_documents({"user_id": user_id})
+            total_pages = max(1, (total_items + limit - 1) // limit)
+            
+            inventory_items = list(self.inventories.find(
+                {"user_id": user_id}
+            ).skip(skip).limit(limit).sort("item_name", 1))
+            
+            items_with_details = []
+            for inv_item in inventory_items:
+                try:
+                    item = self.items.find_one({"_id": ObjectId(inv_item["item_id"])})
+                    if item:
+                        items_with_details.append({
+                            "inventory_data": inv_item,
+                            "item_details": item
+                        })
+                except:
+                    continue
+            
+            return {
+                "items": items_with_details,
+                "total_items": total_items,
+                "total_pages": total_pages,
+                "current_page": min(page, total_pages),
+                "limit": limit
+            }
+        except Exception as e:
+            print(f"Error en get_inventory: {e}")
+            return {"items": [], "total_items": 0, "total_pages": 0, "current_page": 1, "limit": 10}
     
     def search_items(self, search_term: str, limit: int = 10):
         """Busca items por nombre"""
-        if not self.db:
+        if self.db is None:  # CORREGIDO: Comparar con None
             return []
         
-        return list(self.items.find(
-            {"name_lower": {"$regex": search_term.lower()}}
-        ).limit(limit).sort("name", 1))
+        try:
+            return list(self.items.find(
+                {"name_lower": {"$regex": search_term.lower(), "$options": "i"}}
+            ).limit(limit).sort("name", 1))
+        except Exception as e:
+            print(f"Error en search_items: {e}")
+            return []
     
     def get_item_info(self, item_identifier: str):
         """Obtiene información detallada de un item"""
-        if not self.db:
+        if self.db is None:  # CORREGIDO: Comparar con None
             return None
         
-        if item_identifier.isdigit():
-            try:
+        try:
+            if item_identifier.isdigit():
                 return self.items.find_one({"_id": ObjectId(item_identifier)})
-            except:
-                return None
-        else:
-            return self.items.find_one({"name_lower": item_identifier.lower()})
+            else:
+                return self.items.find_one({"name_lower": item_identifier.lower()})
+        except Exception as e:
+            print(f"Error en get_item_info: {e}")
+            return None
     
     def get_user_stats(self, discord_id: int):
         """Obtiene estadísticas del usuario"""
-        if not self.db:
+        if self.db is None:  # CORREGIDO: Comparar con None
             return {"unique_items": 0, "total_units": 0}
         
         user_id = str(discord_id)
-        unique_items = self.inventories.count_documents({"user_id": user_id})
-        
-        pipeline = [
-            {"$match": {"user_id": user_id}},
-            {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
-        ]
-        result = list(self.inventories.aggregate(pipeline))
-        total_units = result[0]["total"] if result else 0
-        
-        return {
-            "unique_items": unique_items,
-            "total_units": total_units
-        }
+        try:
+            unique_items = self.inventories.count_documents({"user_id": user_id})
+            
+            pipeline = [
+                {"$match": {"user_id": user_id}},
+                {"$group": {"_id": None, "total": {"$sum": "$quantity"}}}
+            ]
+            result = list(self.inventories.aggregate(pipeline))
+            total_units = result[0]["total"] if result else 0
+            
+            return {
+                "unique_items": unique_items,
+                "total_units": total_units
+            }
+        except Exception as e:
+            print(f"Error en get_user_stats: {e}")
+            return {"unique_items": 0, "total_units": 0}
 
 # Inicializar MongoDB
 db = MongoDB()
@@ -421,6 +441,7 @@ async def mochila_add(ctx, args: str):
         await ctx.send("❌ Debes especificar el nombre del item")
         return
     
+    # CORREGIDO: Usar db.db is None en lugar de db.db
     if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
@@ -486,6 +507,7 @@ async def mochila_remove(ctx, args: str):
         await ctx.send("❌ Debes especificar el nombre o ID del item")
         return
     
+    # CORREGIDO: Usar db.db is None en lugar de db.db
     if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
@@ -529,6 +551,7 @@ async def mochila_show(ctx, args: str = None):
     if args and args.isdigit():
         page = int(args)
     
+    # CORREGIDO: Usar db.db is None en lugar de db.db
     if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
@@ -598,6 +621,7 @@ async def mochila_search(ctx, args: str):
         await ctx.send("❌ El término de búsqueda debe tener al menos 2 caracteres")
         return
     
+    # CORREGIDO: Usar db.db is None en lugar de db.db
     if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
@@ -645,6 +669,7 @@ async def mochila_info(ctx, args: str):
         await ctx.send("❌ Uso: `t!mochila info <nombre/id>`")
         return
     
+    # CORREGIDO: Usar db.db is None en lugar de db.db
     if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
@@ -688,6 +713,7 @@ async def mochila_info(ctx, args: str):
 
 async def mochila_stats(ctx):
     """Muestra estadísticas del usuario"""
+    # CORREGIDO: Usar db.db is None en lugar de db.db
     if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
