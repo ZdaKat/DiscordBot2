@@ -2318,6 +2318,65 @@ async def on_command_error(ctx, error):
     else:
         print(f"Error en comando {ctx.command}: {error}")
 
+#-------------------------------------------------------------------------------
+# ========== WEBSERVER PARA RENDER ==========
+from flask import Flask
+from threading import Thread
+import os
+
+# Crear servidor Flask simple
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🎮 Bot de juego Discord funcionando | Usa t!game para jugar"
+
+def run_webserver():
+    port = int(os.environ.get('PORT', 8080))  # Render asigna un puerto
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    """Mantiene el bot activo en Render"""
+    server = Thread(target=run_webserver)
+    server.daemon = True
+    server.start()
+    print(f"🌐 Servidor web iniciado en puerto {os.environ.get('PORT', 8080)}")
+
+# ========== MODIFICAR on_ready ==========
+@bot.event
+async def on_ready():
+    print(f'✅ Bot conectado como {bot.user}')
+    print(f'👥 Conectado a {len(bot.guilds)} servidores')
+    
+    # Estadísticas del juego
+    print(f"🎮 Personajes totales: {len(ALL_CHARACTERS)}")
+    print(f"  • S: {len(S_CHARACTERS)} | A: {len(A_CHARACTERS)} | B: {len(B_CHARACTERS)} | C: {len(C_CHARACTERS)} | Iniciales: {len(STARTER_CHARACTERS)}")
+    print(f"🎲 Probabilidades Daily: S({CHARACTER_PROBABILITIES['S']}%) A({CHARACTER_PROBABILITIES['A']}%) B({CHARACTER_PROBABILITIES['B']}%) C({CHARACTER_PROBABILITIES['C']}%) Recursos({CHARACTER_PROBABILITIES['resources']}%)")
+    
+    # Iniciar tareas automáticas
+    if not reset_daily_tasks.is_running():
+        reset_daily_tasks.start()
+    
+    if not full_recovery_task.is_running():
+        full_recovery_task.start()
+    
+    # Iniciar servidor web si está en Render
+    try:
+        # Verificar si estamos en Render (tiene variable PORT)
+        if 'PORT' in os.environ:
+            keep_alive()
+            print("✅ Servidor web para Render iniciado")
+    except Exception as e:
+        print(f"⚠️ Error al iniciar servidor web: {e}")
+    
+    await bot.change_presence(activity=discord.Activity(
+        type=discord.ActivityType.playing,
+        name="t!game start para jugar"
+    ))
+
+#---------------------------------------------------------------------------------
+
+
 # ========== INICIAR EL BOT ==========
 if __name__ == "__main__":
     if not DISCORD_TOKEN:
@@ -2333,6 +2392,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
