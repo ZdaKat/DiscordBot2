@@ -6,6 +6,11 @@ DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 import webserver
 import asyncio
 
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = commands.Bot(command_prefix = "t!",intents=intents)
+
 #----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
 #----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
 #----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
@@ -18,21 +23,6 @@ import asyncio
 
 # Cargar variables de entorno
 load_dotenv()
-
-# Configurar intents
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-
-# Crear bot con prefijo
-bot = commands.Bot(command_prefix='t!', intents=intents)
-
-
-# Evento cuando el bot está listo
-@bot.event
-async def on_ready():
-    print(f'✅ Bot conectado como {bot.user}')
-    print(f'👥 Conectado a {len(bot.guilds)} servidores')
     
     # Cambiar estado del bot
     await bot.change_presence(activity=discord.Game(name="!mochila"))
@@ -105,6 +95,7 @@ async def on_ready():
 webserver.keep_alive()
 
 bot.run(DISCORD_TOKEN)
+
 
 
 
