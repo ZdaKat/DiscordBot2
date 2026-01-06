@@ -1,36 +1,24 @@
 import discord
 from discord.ext import commands
-import requests
-import os
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-import webserver
-import asyncio
-
-intents = discord.Intents.default()
-intents.message_content = True
-
-bot = commands.Bot(command_prefix = "t!",intents=intents)
-
-#----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
-#----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
-#----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
-
-import discord
-from discord.ext import commands
 from pymongo import MongoClient, ReturnDocument
 import os
-from dotenv import load_dotenv
 import random
 import re
 import aiohttp
-import json
 from datetime import datetime
+from bson import ObjectId
 import asyncio
 
 # ========== CONFIGURACIÓN INICIAL ==========
 # Cargar variables de entorno
+from dotenv import load_dotenv
 load_dotenv()
 
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="t!", intents=intents)
 
 # ========== CONEXIÓN A MONGODB ATLAS ==========
 class MongoDB:
@@ -38,16 +26,27 @@ class MongoDB:
         """Inicializa la conexión a MongoDB Atlas"""
         self.connection_string = os.getenv("MONGODB_URI")
         if not self.connection_string:
-            raise ValueError("❌ MONGODB_URI no encontrada en .env")
+            print("⚠️ MONGODB_URI no encontrada en .env - Sistema de mochila desactivado")
+            self.client = None
+            self.db = None
+            return
         
         print("🔗 Conectando a MongoDB Atlas...")
-        self.client = MongoClient(self.connection_string)
-        self.db = self.client.discord_bot
-        self.setup_collections()
-        print("✅ Conectado a MongoDB Atlas")
+        try:
+            self.client = MongoClient(self.connection_string)
+            self.db = self.client.discord_bot
+            self.setup_collections()
+            print("✅ Conectado a MongoDB Atlas")
+        except Exception as e:
+            print(f"❌ Error al conectar a MongoDB: {e}")
+            self.client = None
+            self.db = None
     
     def setup_collections(self):
         """Configura las colecciones y índices"""
+        if not self.db:
+            return
+        
         self.users = self.db.users
         self.inventories = self.db.inventories
         self.items = self.db.items
@@ -60,6 +59,9 @@ class MongoDB:
     # ========== MÉTODOS DE USUARIO ==========
     def get_or_create_user(self, discord_id: int, username: str):
         """Obtiene o crea un usuario en la base de datos"""
+        if not self.db:
+            return None
+        
         return self.users.find_one_and_update(
             {"discord_id": str(discord_id)},
             {"$setOnInsert": {
@@ -74,6 +76,9 @@ class MongoDB:
     # ========== MÉTODOS DE INVENTARIO ==========
     def add_item(self, discord_id: int, item_name: str, quantity: int = 1):
         """Añade un item al inventario del usuario"""
+        if not self.db:
+            return {"error": "Base de datos no disponible"}
+        
         user = self.get_or_create_user(discord_id, "Unknown")
         
         # Buscar o crear el item global
@@ -111,12 +116,14 @@ class MongoDB:
     
     def remove_item(self, discord_id: int, item_identifier: str, quantity: int = 1):
         """Remueve items del inventario"""
+        if not self.db:
+            return {"error": "Base de datos no disponible"}
+        
         user_id = str(discord_id)
         
         # Buscar el item (por ID o nombre)
         item = None
         if item_identifier.isdigit():
-            from bson import ObjectId
             try:
                 item = self.items.find_one({"_id": ObjectId(item_identifier)})
             except:
@@ -167,11 +174,14 @@ class MongoDB:
     
     def get_inventory(self, discord_id: int, page: int = 1, limit: int = 10):
         """Obtiene el inventario de un usuario con paginación"""
+        if not self.db:
+            return {"items": [], "total_items": 0, "total_pages": 0, "current_page": 1, "limit": 10}
+        
         user_id = str(discord_id)
         skip = (page - 1) * limit
         
         total_items = self.inventories.count_documents({"user_id": user_id})
-        total_pages = (total_items + limit - 1) // limit
+        total_pages = max(1, (total_items + limit - 1) // limit)
         
         inventory_items = list(self.inventories.find(
             {"user_id": user_id}
@@ -190,20 +200,25 @@ class MongoDB:
             "items": items_with_details,
             "total_items": total_items,
             "total_pages": total_pages,
-            "current_page": page,
+            "current_page": min(page, total_pages),
             "limit": limit
         }
     
     def search_items(self, search_term: str, limit: int = 10):
         """Busca items por nombre"""
+        if not self.db:
+            return []
+        
         return list(self.items.find(
             {"name_lower": {"$regex": search_term.lower()}}
         ).limit(limit).sort("name", 1))
     
     def get_item_info(self, item_identifier: str):
         """Obtiene información detallada de un item"""
+        if not self.db:
+            return None
+        
         if item_identifier.isdigit():
-            from bson import ObjectId
             try:
                 return self.items.find_one({"_id": ObjectId(item_identifier)})
             except:
@@ -213,6 +228,9 @@ class MongoDB:
     
     def get_user_stats(self, discord_id: int):
         """Obtiene estadísticas del usuario"""
+        if not self.db:
+            return {"unique_items": 0, "total_units": 0}
+        
         user_id = str(discord_id)
         unique_items = self.inventories.count_documents({"user_id": user_id})
         
@@ -229,30 +247,29 @@ class MongoDB:
         }
 
 # Inicializar MongoDB
-try:
-    db = MongoDB()
-except Exception as e:
-    print(f"❌ Error al conectar a MongoDB: {e}")
-    db = None
+db = MongoDB()
 
 # ========== EVENTOS DEL BOT ==========
 @bot.event
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user}')
     print(f'👥 Conectado a {len(bot.guilds)} servidores')
+    await bot.change_presence(activity=discord.Activity(
+        type=discord.ActivityType.watching,
+        name="t!help"
+    ))
 
 @bot.event
 async def on_command_error(ctx, error):
     """Manejo de errores de comandos"""
     if isinstance(error, commands.CommandNotFound):
-        await ctx.send("❌ Comando no encontrado. Usa `!help` para ver la lista.")
+        return  # Ignorar comandos no encontrados
     elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"❌ Faltan argumentos. Usa `!help {ctx.command}` para ayuda.")
+        await ctx.send(f"❌ Faltan argumentos. Usa `t!help {ctx.command}` para ayuda.")
     else:
-        await ctx.send(f"❌ Error: {str(error)}")
-        print(f"Error en comando: {error}")
+        print(f"Error en comando {ctx.command}: {error}")
 
-# ========== COMANDO HELP PERSONALIZADO ==========
+# ========== COMANDO HELP ==========
 @bot.command(name='help', aliases=['ayuda', 'comandos'])
 async def help_command(ctx, comando: str = None):
     """Muestra todos los comandos disponibles"""
@@ -281,34 +298,35 @@ async def help_command(ctx, comando: str = None):
     else:
         # Mostrar todos los comandos
         embed = discord.Embed(
-            title="📚 Lista de Comandos",
-            description="Usa `!help <comando>` para más detalles",
+            title="📚 Lista de Comandos - Prefijo: t!",
+            description="Usa `t!help <comando>` para más detalles",
             color=discord.Color.blue()
         )
         
         embed.add_field(
             name="🎒 **Mochila/Inventario**",
-            value="`!mochila add <item>` - Añadir item\n"
-                  "`!mochila remove <item>` - Remover item\n"
-                  "`!mochila show` - Ver inventario\n"
-                  "`!mochila search <item>` - Buscar item\n"
-                  "`!mochila info <item>` - Info de item",
+            value="`t!mochila add <item>` - Añadir item\n"
+                  "`t!mochila remove <item>` - Remover item\n"
+                  "`t!mochila show` - Ver inventario\n"
+                  "`t!mochila search <item>` - Buscar item\n"
+                  "`t!mochila info <item>` - Info de item",
             inline=False
         )
         
         embed.add_field(
             name="🎮 **Diversión**",
-            value="`!golpe @usuario` - Golpear a alguien\n"
-                  "`!choose op1, op2` - Elegir entre opciones\n"
-                  "`!pokemon <nombre>` - Info de Pokémon\n"
-                  "`!moves <pokemon> [nivel]` - Movimientos Pokémon",
+            value="`t!golpe @usuario` - Golpear a alguien\n"
+                  "`t!choose op1, op2` - Elegir entre opciones\n"
+                  "`t!pokemon <nombre>` - Info de Pokémon\n"
+                  "`t!moves <pokemon> [nivel]` - Movimientos Pokémon",
             inline=False
         )
         
         embed.add_field(
             name="⚙️ **Utilidad**",
-            value="`!help` - Muestra esta ayuda\n"
-                  "`!ping` - Ver latencia del bot",
+            value="`t!help` - Muestra esta ayuda\n"
+                  "`t!ping` - Ver latencia del bot\n"
+                  "`t!serverinfo` - Info del servidor",
             inline=False
         )
         
@@ -323,43 +341,43 @@ async def mochila(ctx, accion: str = None, *, args: str = None):
         # Mostrar ayuda de mochila
         embed = discord.Embed(
             title="🎒 Comandos de Mochila",
-            description="**Uso:** `!mochila <accion> [argumentos]`",
+            description="**Uso:** `t!mochila <accion> [argumentos]`",
             color=discord.Color.blue()
         )
         
         embed.add_field(
             name="➕ **add** <nombre> [x<cantidad>]",
-            value="Añade items a tu mochila\n`!mochila add espada x3`",
+            value="Añade items a tu mochila\n`t!mochila add espada x3`",
             inline=False
         )
         
         embed.add_field(
             name="➖ **remove** <nombre/id> [x<cantidad>]",
-            value="Remueve items de tu mochila\n`!mochila remove espada`",
+            value="Remueve items de tu mochila\n`t!mochila remove espada`",
             inline=False
         )
         
         embed.add_field(
             name="📋 **show** [página]",
-            value="Muestra todos tus items\n`!mochila show 2`",
+            value="Muestra todos tus items\n`t!mochila show 2`",
             inline=False
         )
         
         embed.add_field(
             name="🔍 **search** <nombre>",
-            value="Busca items por nombre\n`!mochila search oro`",
+            value="Busca items por nombre\n`t!mochila search oro`",
             inline=False
         )
         
         embed.add_field(
             name="ℹ️ **info** <nombre/id>",
-            value="Muestra info de un item\n`!mochila info 123abc`",
+            value="Muestra info de un item\n`t!mochila info 123abc`",
             inline=False
         )
         
         embed.add_field(
             name="📊 **stats**",
-            value="Muestra tus estadísticas\n`!mochila stats`",
+            value="Muestra tus estadísticas\n`t!mochila stats`",
             inline=False
         )
         
@@ -381,12 +399,12 @@ async def mochila(ctx, accion: str = None, *, args: str = None):
     elif accion == "stats":
         await mochila_stats(ctx)
     else:
-        await ctx.send("❌ Acción no válida. Usa `!mochila` para ver opciones.")
+        await ctx.send("❌ Acción no válida. Usa `t!mochila` para ver opciones.")
 
 async def mochila_add(ctx, args: str):
     """Añade items a la mochila"""
     if not args:
-        await ctx.send("❌ Uso: `!mochila add <nombre> [x<cantidad>]`")
+        await ctx.send("❌ Uso: `t!mochila add <nombre> [x<cantidad>]`")
         return
     
     # Parsear argumentos
@@ -403,7 +421,7 @@ async def mochila_add(ctx, args: str):
         await ctx.send("❌ Debes especificar el nombre del item")
         return
     
-    if db is None:
+    if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
     
@@ -451,7 +469,7 @@ async def mochila_add(ctx, args: str):
 async def mochila_remove(ctx, args: str):
     """Remueve items de la mochila"""
     if not args:
-        await ctx.send("❌ Uso: `!mochila remove <nombre/id> [x<cantidad>]`")
+        await ctx.send("❌ Uso: `t!mochila remove <nombre/id> [x<cantidad>]`")
         return
     
     # Parsear argumentos
@@ -468,7 +486,7 @@ async def mochila_remove(ctx, args: str):
         await ctx.send("❌ Debes especificar el nombre o ID del item")
         return
     
-    if db is None:
+    if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
     
@@ -511,7 +529,7 @@ async def mochila_show(ctx, args: str = None):
     if args and args.isdigit():
         page = int(args)
     
-    if db is None:
+    if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
     
@@ -522,7 +540,7 @@ async def mochila_show(ctx, args: str = None):
         if not inventory_data["items"]:
             embed = discord.Embed(
                 title="🎒 Tu mochila está vacía",
-                description="Usa `!mochila add <item>` para añadir items",
+                description="Usa `t!mochila add <item>` para añadir items",
                 color=discord.Color.light_grey()
             )
             await ctx.send(embed=embed)
@@ -537,7 +555,7 @@ async def mochila_show(ctx, args: str = None):
         
         # Estadísticas
         stats = db.get_user_stats(ctx.author.id)
-        embed.description = f"**Página {page}/{inventory_data['total_pages']}**"
+        embed.description = f"**Página {inventory_data['current_page']}/{inventory_data['total_pages']}**"
         embed.add_field(
             name="📊 Estadísticas",
             value=f"**Items únicos:** {stats['unique_items']}\n**Total unidades:** {stats['total_units']}",
@@ -561,7 +579,9 @@ async def mochila_show(ctx, args: str = None):
         
         # Paginación
         if inventory_data["total_pages"] > 1:
-            embed.set_footer(text=f"Usa !mochila show {page+1} para la siguiente página")
+            next_page = inventory_data['current_page'] + 1
+            if next_page <= inventory_data['total_pages']:
+                embed.set_footer(text=f"Usa t!mochila show {next_page} para la siguiente página")
         
         await ctx.send(embed=embed)
         
@@ -571,14 +591,14 @@ async def mochila_show(ctx, args: str = None):
 async def mochila_search(ctx, args: str):
     """Busca items por nombre"""
     if not args:
-        await ctx.send("❌ Uso: `!mochila search <nombre>`")
+        await ctx.send("❌ Uso: `t!mochila search <nombre>`")
         return
     
     if len(args) < 2:
         await ctx.send("❌ El término de búsqueda debe tener al menos 2 caracteres")
         return
     
-    if db is None:
+    if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
     
@@ -622,10 +642,10 @@ async def mochila_search(ctx, args: str):
 async def mochila_info(ctx, args: str):
     """Muestra información de un item"""
     if not args:
-        await ctx.send("❌ Uso: `!mochila info <nombre/id>`")
+        await ctx.send("❌ Uso: `t!mochila info <nombre/id>`")
         return
     
-    if db is None:
+    if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
     
@@ -659,7 +679,7 @@ async def mochila_info(ctx, args: str):
         if user_item:
             embed.add_field(name="📦 Tú tienes", value=f"×{user_item['quantity']}", inline=True)
         
-        embed.set_footer(text="Usa !mochila add/remove para gestionar este item")
+        embed.set_footer(text="Usa t!mochila add/remove para gestionar este item")
         
         await ctx.send(embed=embed)
         
@@ -668,7 +688,7 @@ async def mochila_info(ctx, args: str):
 
 async def mochila_stats(ctx):
     """Muestra estadísticas del usuario"""
-    if db is None:
+    if db.db is None:
         await ctx.send("❌ La base de datos no está disponible")
         return
     
@@ -717,7 +737,7 @@ async def mochila_stats(ctx):
 async def golpe(ctx, user: discord.Member = None):
     """Golpea a un usuario mencionado"""
     if not user:
-        await ctx.send("❌ Debes mencionar a alguien para golpear. Ejemplo: `!golpe @usuario`")
+        await ctx.send("❌ Debes mencionar a alguien para golpear. Ejemplo: `t!golpe @usuario`")
         return
     
     if user == ctx.author:
@@ -750,14 +770,14 @@ async def golpe(ctx, user: discord.Member = None):
 async def choose(ctx, *, opciones: str = None):
     """Elige entre múltiples opciones separadas por comas"""
     if not opciones:
-        await ctx.send("❌ Necesitas proporcionar opciones. Ejemplo: `!choose pizza, hamburguesa, sushi`")
+        await ctx.send("❌ Necesitas proporcionar opciones. Ejemplo: `t!choose pizza, hamburguesa, sushi`")
         return
     
     # Dividir opciones por comas y limpiar
     lista_opciones = [opcion.strip() for opcion in opciones.split(',') if opcion.strip()]
     
     if len(lista_opciones) < 2:
-        await ctx.send("❌ Necesitas al menos 2 opciones. Ejemplo: `!choose pizza, hamburguesa`")
+        await ctx.send("❌ Necesitas al menos 2 opciones. Ejemplo: `t!choose pizza, hamburguesa`")
         return
     
     if len(lista_opciones) > 20:
@@ -804,7 +824,7 @@ async def get_pokemon_data(pokemon_name: str):
 async def pokemon_info(ctx, *, pokemon: str):
     """Muestra información de un Pokémon"""
     if not pokemon:
-        await ctx.send("❌ Debes especificar un Pokémon. Ejemplo: `!pokemon pikachu`")
+        await ctx.send("❌ Debes especificar un Pokémon. Ejemplo: `t!pokemon pikachu`")
         return
     
     try:
@@ -877,7 +897,7 @@ async def pokemon_info(ctx, *, pokemon: str):
 async def pokemon_moves(ctx, pokemon: str, nivel_max: int = 100):
     """Muestra los movimientos que un Pokémon aprende hasta cierto nivel"""
     if not pokemon:
-        await ctx.send("❌ Debes especificar un Pokémon. Ejemplo: `!moves pikachu 15`")
+        await ctx.send("❌ Debes especificar un Pokémon. Ejemplo: `t!moves pikachu 15`")
         return
     
     if nivel_max < 1 or nivel_max > 100:
@@ -1011,7 +1031,7 @@ CANAL_ORIGEN_ID = 1447369197091815554  # Cambia esto por el ID de tu canal
 async def prueba_gif(ctx, user: discord.Member = None, *, argumentos: str = None):
     """
     Comando de prueba con GIF personalizado
-    Uso: !prueba [@usuario] [titulo: texto] [texto: descripción]
+    Uso: t!prueba [@usuario] [titulo: texto] [texto: descripción]
     """
     canal_origen = bot.get_channel(CANAL_ORIGEN_ID)
     
@@ -1115,34 +1135,31 @@ async def clear_messages(ctx, cantidad: int = 10):
     
     msg = await ctx.send(embed=embed, delete_after=5)
 
-# ========== INICIO DEL BOT ==========
+# ========== PARA RENDER ==========
+# Importar y configurar el webserver para mantener el bot activo
+try:
+    from webserver import keep_alive
+    keep_alive()
+    print("🌐 Servidor web iniciado para Render")
+except ImportError:
+    print("⚠️ No se encontró webserver.py, funcionando sin servidor web")
+
+# ========== INICIAR EL BOT ==========
 if __name__ == "__main__":
-    # Verificar que el token existe
-    token = os.getenv("DISCORD_TOKEN")
-    if not token:
-        print("❌ No se encontró DISCORD_TOKEN en .env")
-        print("💡 Crea un archivo .env con: DISCORD_TOKEN=tu_token_aqui")
+    if not DISCORD_TOKEN:
+        print("❌ ERROR: No se encontró DISCORD_TOKEN")
+        print("💡 Asegúrate de tener un archivo .env con DISCORD_TOKEN=tu_token")
         exit(1)
     
-    # Iniciar bot
-    print("🤖 Iniciando bot...")
+    print("🤖 Iniciando bot de Discord...")
     try:
-        bot.run(token)
+        bot.run(DISCORD_TOKEN)
     except discord.LoginFailure:
-        print("❌ Error: Token de Discord inválido")
+        print("❌ ERROR: Token de Discord inválido")
+        print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
-        print(f"❌ Error al iniciar el bot: {e}")
+        print(f"❌ ERROR: {e}")
 
-#----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
-#----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
-#----------------ZONA DE COMANDOS POKE: MOCHILA-------------------
-@bot.event
-async def on_ready():
-    print("Success: Bot is connected to Discord")
-
-webserver.keep_alive()
-
-bot.run(DISCORD_TOKEN)
 
 
 
