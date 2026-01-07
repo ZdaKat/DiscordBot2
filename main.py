@@ -272,7 +272,10 @@ class GameDatabase:
                 "effect_chance": character.effect_chance
             },
             "coins": 0,
-            "inventory": [],
+            "inventory": {
+                "potions": 0,
+                "revives": 0
+            },
             "daily_uses_today": 0,
             "sdaily_used_today": False,
             "last_daily_reset": datetime.utcnow(),
@@ -285,16 +288,12 @@ class GameDatabase:
             "last_full_recovery": datetime.utcnow(),
             "created_at": datetime.utcnow(),
             "last_active": datetime.utcnow(),
-            "inventory": {
-            "potions": 0,
-            "revives": 0
-            },
             "battle_counter": {
-            "count": 0,
-            "first_battle_time": None,
-            "last_battle_time": None,
-            "scaling": 1.0
-    }
+                "count": 0,
+                "first_battle_time": None,
+                "last_battle_time": None,
+                "scaling": 1.0
+            }
         }
         
         return self.players.insert_one(player_data)
@@ -311,75 +310,75 @@ class GameDatabase:
         )
 
     def add_item(self, discord_id: int, item: str, amount: int = 1) -> Optional[Dict]:
-    """Añade un item al inventario del jugador"""
-    if item not in ["potions", "revives"]:
-        return None
-    
-    return self.players.find_one_and_update(
-        {"discord_id": str(discord_id)},
-        {"$inc": {f"inventory.{item}": amount}},
-        return_document=ReturnDocument.AFTER
-    )
+        """Añade un item al inventario del jugador"""
+        if item not in ["potions", "revives"]:
+            return None
+        
+        return self.players.find_one_and_update(
+            {"discord_id": str(discord_id)},
+            {"$inc": {f"inventory.{item}": amount}},
+            return_document=ReturnDocument.AFTER
+        )
 
     def use_item(self, discord_id: int, item: str, amount: int = 1) -> Optional[Dict]:
-    """Usa un item del inventario del jugador"""
-    player = self.get_player(discord_id)
-    if not player:
-        return None
-    
-    current = player["inventory"].get(item, 0)
-    if current < amount:
-        return None  # No tiene suficientes
-    
-    return self.players.find_one_and_update(
-        {"discord_id": str(discord_id)},
-        {"$inc": {f"inventory.{item}": -amount}},
-        return_document=ReturnDocument.AFTER
-    )
+        """Usa un item del inventario del jugador"""
+        player = self.get_player(discord_id)
+        if not player:
+            return None
+        
+        current = player["inventory"].get(item, 0)
+        if current < amount:
+            return None  # No tiene suficientes
+        
+        return self.players.find_one_and_update(
+            {"discord_id": str(discord_id)},
+            {"$inc": {f"inventory.{item}": -amount}},
+            return_document=ReturnDocument.AFTER
+        )
 
-def update_battle_counter(self, discord_id: int) -> Optional[Dict]:
-    """Actualiza el contador de batallas y calcula el escalado"""
-    player = self.get_player(discord_id)
-    if not player:
-        return None
-    
-    battle_counter = player.get("battle_counter", {
-        "count": 0,
-        "first_battle_time": None,
-        "last_battle_time": None,
-        "scaling": 1.0
-    })
-    
-    now = datetime.utcnow()
-    
-    # Si ha pasado más de 1 hora desde la primera batalla, reiniciar
-    if battle_counter["first_battle_time"]:
-        time_diff = (now - battle_counter["first_battle_time"]).total_seconds()
-        if time_diff > 3600:  # 1 hora en segundos
-            battle_counter["count"] = 0
+    def update_battle_counter(self, discord_id: int) -> Optional[Dict]:
+        """Actualiza el contador de batallas y calcula el escalado"""
+        player = self.get_player(discord_id)
+        if not player:
+            return None
+        
+        battle_counter = player.get("battle_counter", {
+            "count": 0,
+            "first_battle_time": None,
+            "last_battle_time": None,
+            "scaling": 1.0
+        })
+        
+        now = datetime.utcnow()
+        
+        # Si ha pasado más de 1 hora desde la primera batalla, reiniciar
+        if battle_counter["first_battle_time"]:
+            time_diff = (now - battle_counter["first_battle_time"]).total_seconds()
+            if time_diff > 3600:  # 1 hora en segundos
+                battle_counter["count"] = 0
+                battle_counter["first_battle_time"] = now
+                battle_counter["scaling"] = 1.0
+        
+        # Incrementar contador
+        battle_counter["count"] += 1
+        battle_counter["last_battle_time"] = now
+        
+        if battle_counter["count"] == 1:
             battle_counter["first_battle_time"] = now
+        
+        # Calcular escalado: 5% por cada 10 batallas (acumulativo)
+        if battle_counter["count"] >= 10:
+            # Aumentar el escalado en un 5% por cada 10 batallas completadas
+            extra_scaling = (battle_counter["count"] // 10) * 0.05
+            battle_counter["scaling"] = 1.0 + extra_scaling
+        else:
             battle_counter["scaling"] = 1.0
-    
-    # Incrementar contador
-    battle_counter["count"] += 1
-    battle_counter["last_battle_time"] = now
-    
-    if battle_counter["count"] == 1:
-        battle_counter["first_battle_time"] = now
-    
-    # Calcular escalado: 5% por cada 10 batallas (acumulativo)
-    if battle_counter["count"] >= 10:
-        # Aumentar el escalado en un 5% por cada 10 batallas completadas
-        extra_scaling = (battle_counter["count"] // 10) * 0.05
-        battle_counter["scaling"] = 1.0 + extra_scaling
-    else:
-        battle_counter["scaling"] = 1.0
-    
-    return self.players.find_one_and_update(
-        {"discord_id": str(discord_id)},
-        {"$set": {"battle_counter": battle_counter}},
-        return_document=ReturnDocument.AFTER
-    )
+        
+        return self.players.find_one_and_update(
+            {"discord_id": str(discord_id)},
+            {"$set": {"battle_counter": battle_counter}},
+            return_document=ReturnDocument.AFTER
+        )
     
     def unlock_character(self, discord_id: int, character_name: str) -> Optional[Dict]:
         """Desbloquea un nuevo personaje para el jugador"""
@@ -688,6 +687,40 @@ async def full_recovery_task():
         revived_count = db.check_and_revive_dead_players()
         print(f"✅ Recuperación completa: {healed_count} curados, {revived_count} revividos")
 
+@tasks.loop(minutes=60)
+async def reset_battle_counters():
+    """Reinicia los contadores de batalla que hayan pasado 1 hora"""
+    if db.db is None:
+        return
+    
+    now = datetime.utcnow()
+    players = list(db.players.find({}))
+    
+    reset_count = 0
+    for player in players:
+        battle_counter = player.get("battle_counter", {})
+        first_battle_time = battle_counter.get("first_battle_time")
+        
+        if first_battle_time:
+            time_diff = (now - first_battle_time).total_seconds()
+            if time_diff > 3600:  # 1 hora
+                # Reiniciar contador
+                db.players.update_one(
+                    {"_id": player["_id"]},
+                    {"$set": {
+                        "battle_counter": {
+                            "count": 0,
+                            "first_battle_time": None,
+                            "last_battle_time": None,
+                            "scaling": 1.0
+                        }
+                    }}
+                )
+                reset_count += 1
+    
+    if reset_count > 0:
+        print(f"✅ Contadores de batalla reiniciados: {reset_count} jugadores")
+
 # ========== FUNCIONES AUXILIARES ==========
 def get_random_monster() -> Monster:
     """Selecciona un monstruo aleatorio basado en las probabilidades"""
@@ -879,6 +912,8 @@ async def game_main(ctx, action: str = None, *, args: str = None):
         await game_monsters(ctx)
     elif action == "probabilities":
         await game_probabilities(ctx)
+    elif action == "amistosa":
+        await game_friendly(ctx, args)
     else:
         await ctx.send("❌ Acción no válida. Usa `t!game help` para ver opciones.")
 
@@ -893,7 +928,7 @@ async def show_game_help(ctx):
     embed.add_field(
         name="🎯 **Inicio**",
         value="`start <personaje>` - Comienza tu aventura\n"
-              "Personajes iniciales: Guy, Mage, Archer, Rogue",
+              "Personajes iniciales: Guy",
         inline=False
     )
     
@@ -913,6 +948,23 @@ async def show_game_help(ctx):
     )
     
     embed.add_field(
+        name="⚔️ **Combate**",
+        value="`fight <monstruo>` - Pelea contra un monstruo\n"
+              "`amistosa @usuario` - Batalla amistosa PvP\n"
+              "`heal` - Cura a tu personaje actual",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🤝 **Batallas Amistosas**",
+        value="• Sin pérdida de vida real\n"
+              "• Sin activar efectos especiales\n"
+              "• Solo por diversión y práctica\n"
+              "• Requiere aceptación del oponente",
+        inline=False
+    )
+    
+    embed.add_field(
         name="📊 **Información**",
         value="`profile` - Tu perfil de jugador\n"
               "`inventory` - Tu inventario\n"
@@ -924,9 +976,10 @@ async def show_game_help(ctx):
     )
     
     embed.add_field(
-        name="⚔️ **Combate**",
-        value="`fight <monstruo>` - Pelea contra un monstruo\n"
-              "`heal` - Cura a tu personaje actual",
+        name="🧪 **Items**",
+        value="`use potion` - Usar poción de vida\n"
+              "`use revive` - Usar revivir\n"
+              "`inventory` - Ver tus items",
         inline=False
     )
     
@@ -960,6 +1013,15 @@ async def show_game_help(ctx):
               "• **Personaje B:** 10% (Raro)\n"
               "• **Personaje C:** 20% (Común)\n"
               "• **Recursos:** 60% (Monedas/Pociones/Monstruos)",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⚠️ **Sistema de Escalado**",
+        value="• Después de **10 combates en 1 hora**, los enemigos escalan **+5%**\n"
+              "• El escalado se acumula por cada 10 combates\n"
+              "• Se reinicia automáticamente cada **1 hora**\n"
+              "• Enemigos escalados dan **más monedas**",
         inline=False
     )
     
@@ -1070,36 +1132,35 @@ async def game_daily(ctx):
         color=discord.Color.gold()
     )
     
-    # En la parte de recursos del daily, modificar:
-if reward_type == "resources":
-    # Recursos normales (60% probabilidad)
-    reward_subtype = random.choices(
-        ["coins", "potion", "monster", "revive"],  # Añadir revive
-        weights=[0.4, 0.3, 0.2, 0.1],  # Ajustar pesos
-        k=1
-    )[0]
-    
-    if reward_subtype == "coins":
-        coins = random.randint(5, 100)
+    if reward_type == "resources":
+        # Recursos normales (60% probabilidad)
+        reward_subtype = random.choices(
+            ["coins", "potion", "monster", "revive"],  # Añadir revive
+            weights=[0.4, 0.3, 0.2, 0.1],  # Ajustar pesos
+            k=1
+        )[0]
+        
+        if reward_subtype == "coins":
+            coins = random.randint(5, 100)
             db.add_coins(ctx.author.id, coins)
             embed.description = f"Has encontrado **{coins} monedas** 💰"
             embed.add_field(name="💸 Monedas totales", value=f"{player['coins'] + coins}", inline=True)
-    elif reward_subtype == "potion":
-        potions = random.randint(1, 3)
-        db.add_item(ctx.author.id, "potions", potions)
-        embed.description = f"Has encontrado **{potions} pociones** ❤️"
-        # Mostrar inventario actualizado
-        player_after = db.get_player(ctx.author.id)
-        embed.add_field(name="🧪 Pociones", value=f"{player_after['inventory']['potions']}", inline=True)
-        
-    elif reward_subtype == "revive":
-        revives = 1  # Solo dar uno, es raro
-        db.add_item(ctx.author.id, "revives", revives)
-        embed.description = f"Has encontrado **{revives} revivir** ⚡"
-        player_after = db.get_player(ctx.author.id)
-        embed.add_field(name="⚡ Revivir", value=f"{player_after['inventory']['revives']}", inline=True)
-        
-    else:  # monster
+        elif reward_subtype == "potion":
+            potions = random.randint(1, 3)
+            db.add_item(ctx.author.id, "potions", potions)
+            embed.description = f"Has encontrado **{potions} pociones** ❤️"
+            # Mostrar inventario actualizado
+            player_after = db.get_player(ctx.author.id)
+            embed.add_field(name="🧪 Pociones", value=f"{player_after['inventory']['potions']}", inline=True)
+            
+        elif reward_subtype == "revive":
+            revives = 1  # Solo dar uno, es raro
+            db.add_item(ctx.author.id, "revives", revives)
+            embed.description = f"Has encontrado **{revives} revivir** ⚡"
+            player_after = db.get_player(ctx.author.id)
+            embed.add_field(name="⚡ Revivir", value=f"{player_after['inventory']['revives']}", inline=True)
+            
+        else:  # monster
             monster = get_random_monster()
             await start_battle(ctx, player, monster)
             return  # La batalla manejará su propio mensaje
@@ -1432,14 +1493,14 @@ async def game_profile(ctx):
     )
 
     inventory = player.get("inventory", {})
-embed.add_field(name="🧪 Pociones", value=f"{inventory.get('potions', 0)}", inline=True)
-embed.add_field(name="⚡ Revivir", value=f"{inventory.get('revives', 0)}", inline=True)
+    embed.add_field(name="🧪 Pociones", value=f"{inventory.get('potions', 0)}", inline=True)
+    embed.add_field(name="⚡ Revivir", value=f"{inventory.get('revives', 0)}", inline=True)
 
-# Mostrar escalado actual si hay
-battle_counter = player.get("battle_counter", {})
-if battle_counter.get("count", 0) >= 10:
-    scaling = battle_counter.get("scaling", 1.0)
-    embed.add_field(name="⚠️ Escalado de enemigos", value=f"{int((scaling-1)*100)}%", inline=True)
+    # Mostrar escalado actual si hay
+    battle_counter = player.get("battle_counter", {})
+    if battle_counter.get("count", 0) >= 10:
+        scaling = battle_counter.get("scaling", 1.0)
+        embed.add_field(name="⚠️ Escalado de enemigos", value=f"{int((scaling-1)*100)}%", inline=True)
     
     embed.set_footer(text=f"Jugando desde {player['created_at'].strftime('%d/%m/%Y')}")
     await ctx.send(embed=embed)
@@ -1795,22 +1856,19 @@ async def game_fight(ctx, monster_name: str = None):
     await start_battle(ctx, player, monster)
 
 async def start_battle(ctx, player_data: Dict, monster: Monster):
-
-    # En start_battle, después de obtener el monstruo, aplicar escalado:
-monster = get_random_monster()
-
-# Aplicar escalado si el jugador tiene un factor de escalado
-player_battle_counter = player_data.get("battle_counter", {})
-scaling = player_battle_counter.get("scaling", 1.0)
-
-if scaling > 1.0:
-    # Escalar vida y daño del monstruo
-    monster.hp = int(monster.hp * scaling)
-    monster.current_hp = monster.hp
-    monster.min_damage = int(monster.min_damage * scaling)
-    monster.max_damage = int(monster.max_damage * scaling)
-    
     """Inicia una batalla entre el jugador y un monstruo"""
+    
+    # Aplicar escalado si el jugador tiene un factor de escalado
+    player_battle_counter = player_data.get("battle_counter", {})
+    scaling = player_battle_counter.get("scaling", 1.0)
+    
+    if scaling > 1.0:
+        # Escalar vida y daño del monstruo
+        monster.hp = int(monster.hp * scaling)
+        monster.current_hp = monster.hp
+        monster.min_damage = int(monster.min_damage * scaling)
+        monster.max_damage = int(monster.max_damage * scaling)
+    
     player = player_data["character_stats"]
     
     # Crear embed inicial de batalla
@@ -2447,89 +2505,6 @@ async def game_probabilities(ctx):
     embed.set_footer(text="Las probabilidades pueden cambiar en futuras actualizaciones")
     await ctx.send(embed=embed)
 
-@tasks.loop(minutes=60)
-async def reset_battle_counters():
-    """Reinicia los contadores de batalla que hayan pasado 1 hora"""
-    if db.db is None:
-        return
-    
-    now = datetime.utcnow()
-    players = list(db.players.find({}))
-    
-    reset_count = 0
-    for player in players:
-        battle_counter = player.get("battle_counter", {})
-        first_battle_time = battle_counter.get("first_battle_time")
-        
-        if first_battle_time:
-            time_diff = (now - first_battle_time).total_seconds()
-            if time_diff > 3600:  # 1 hora
-                # Reiniciar contador
-                db.players.update_one(
-                    {"_id": player["_id"]},
-                    {"$set": {
-                        "battle_counter": {
-                            "count": 0,
-                            "first_battle_time": None,
-                            "last_battle_time": None,
-                            "scaling": 1.0
-                        }
-                    }}
-                )
-                reset_count += 1
-    
-    if reset_count > 0:
-        print(f"✅ Contadores de batalla reiniciados: {reset_count} jugadores")
-
-# ========== COMANDO HELP SIMPLIFICADO ==========
-@bot.command(name='help', aliases=['ayuda', 'comandos'])
-async def help_command(ctx, comando: str = None):
-    """Muestra todos los comandos disponibles"""
-    
-    if comando:
-        # Ayuda específica para un comando
-        cmd = bot.get_command(comando)
-        if not cmd:
-            await ctx.send(f"❌ Comando `{comando}` no encontrado")
-            return
-        
-        embed = discord.Embed(
-            title=f"📖 Ayuda: {cmd.name}",
-            color=discord.Color.green()
-        )
-        
-        if cmd.help:
-            embed.description = cmd.help
-        else:
-            embed.description = "Sin descripción disponible"
-        
-        if cmd.aliases:
-            embed.add_field(name="Alias", value=", ".join(cmd.aliases), inline=True)
-        
-        await ctx.send(embed=embed)
-    else:
-        # Mostrar todos los comandos
-        embed = discord.Embed(
-            title="📚 Lista de Comandos - Prefijo: t!",
-            description="Usa `t!help <comando>` para más detalles",
-            color=discord.Color.blue()
-        )
-        
-        embed.add_field(
-            name="🎮 **Sistema de Juego**",
-            value="`t!game` - Sistema principal del juego\n"
-                  "`t!game start` - Comenzar aventura\n"
-                  "`t!game daily` - Recompensa diaria\n"
-                  "`t!game profile` - Ver tu perfil\n"
-                  "`t!game characters` - Tus personajes\n"
-                  "`t!game fight` - Pelear contra monstruos\n"
-                  "`t!game leaderboard` - Tabla de clasificación",
-            inline=False
-        )
-        
-        await ctx.send(embed=embed)
-
-# ========== FUNCIONES AUXILIARES (AGREGAR) ==========
 async def start_friendly_battle(ctx, player_data: Dict, opponent_data: Dict, opponent_user: discord.Member):
     """Inicia una batalla amistosa entre dos jugadores"""
     player_stats = player_data["character_stats"]
@@ -2616,7 +2591,7 @@ async def start_friendly_battle(ctx, player_data: Dict, opponent_data: Dict, opp
         embed = discord.Embed(
             title="🤝 ¡EMPATE!",
             description=f"Ambos combatientes han caído al mismo tiempo.\n\n"
-                       f"**{player_stats['name']}** y **{opponent_stats['name']** se dan la mano como rivales dignos.",
+                       f"**{player_stats['name']}** y **{opponent_stats['name']}** se dan la mano como rivales dignos.",
             color=discord.Color.greyple()
         )
     elif player_temp_hp <= 0:
@@ -2658,7 +2633,6 @@ async def start_friendly_battle(ctx, player_data: Dict, opponent_data: Dict, opp
     
     await battle_msg.edit(embed=embed)
 
-# ========== COMANDOS DEL JUEGO (AGREGAR AL game_main) ==========
 async def game_friendly(ctx, args: str = None):
     """Inicia una batalla amistosa con otro usuario"""
     if not args:
@@ -2791,165 +2765,6 @@ async def game_friendly(ctx, args: str = None):
         await challenge_msg.edit(embed=embed)
         await challenge_msg.clear_reactions()
 
-# ========== MODIFICAR game_main PARA AÑADIR amistosa ==========
-@bot.command(name='game', aliases=['juego'])
-async def game_main(ctx, action: str = None, *, args: str = None):
-    """Sistema principal del juego"""
-    if not action:
-        await show_game_help(ctx)
-        return
-    
-    action = action.lower()
-    
-    if action == "start":
-        await game_start(ctx, args)
-    elif action == "daily":
-        await game_daily(ctx)
-    elif action == "sdaily":
-        await game_sdaily(ctx)
-    elif action == "profile":
-        await game_profile(ctx)
-    elif action == "characters":
-        await game_characters(ctx, args)
-    elif action == "switch":
-        await game_switch(ctx, args)
-    elif action == "inventory":
-        await game_inventory(ctx)
-    elif action == "shop":
-        await game_shop(ctx)
-    elif action == "fight":
-        await game_fight(ctx, args)
-    elif action == "heal":
-        await game_heal(ctx)
-    elif action == "leaderboard":
-        await game_leaderboard(ctx)
-    elif action == "status":
-        await game_status(ctx)
-    elif action == "revive":
-        await game_revive(ctx)
-    elif action == "monsters":
-        await game_monsters(ctx)
-    elif action == "probabilities":
-        await game_probabilities(ctx)
-    elif action == "amistosa":
-        await game_friendly(ctx, args)
-    elif action == "use":
-        await game_use(ctx, args)
-    else:
-        await ctx.send("❌ Acción no válida. Usa `t!game help` para ver opciones.")
-
-# ========== MODIFICAR show_game_help PARA AÑADIR amistosa ==========
-async def show_game_help(ctx):
-    """Muestra la ayuda del juego"""
-    embed = discord.Embed(
-        title="🎮 Sistema de Juego - Comandos",
-        description="**Prefijo: t!game**",
-        color=discord.Color.purple()
-    )
-    
-    embed.add_field(
-        name="🎯 **Inicio**",
-        value="`start <personaje>` - Comienza tu aventura\n"
-              "Personajes iniciales: Guy, Mage, Archer, Rogue",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="📅 **Recompensas Diarias**",
-        value="`daily` - Recompensa diaria (5 usos/día)\n"
-              "`sdaily` - Recompensa especial (1 uso/día)",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="👥 **Personajes**",
-        value="`characters` - Tus personajes desbloqueados\n"
-              "`characters all` - Ver todos los personajes\n"
-              "`switch <nombre>` - Cambiar de personaje",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="⚔️ **Combate**",
-        value="`fight <monstruo>` - Pelea contra un monstruo\n"
-              "`amistosa @usuario` - Batalla amistosa PvP\n"
-              "`heal` - Cura a tu personaje actual",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🤝 **Batallas Amistosas**",
-        value="• Sin pérdida de vida real\n"
-              "• Sin activar efectos especiales\n"
-              "• Solo por diversión y práctica\n"
-              "• Requiere aceptación del oponente",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="📊 **Información**",
-        value="`profile` - Tu perfil de jugador\n"
-              "`inventory` - Tu inventario\n"
-              "`leaderboard` - Tabla de clasificación\n"
-              "`status` - Estado del servidor\n"
-              "`monsters` - Lista de monstruos\n"
-              "`probabilities` - Probabilidades",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🧪 **Items**",
-        value="`use potion` - Usar poción de vida\n"
-              "`use revive` - Usar revivir\n"
-              "`inventory` - Ver tus items",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="💀 **Muerte**",
-        value="`revive` - Verifica si puedes revivir\n"
-              "⚠️ Si mueres, debes esperar 48 horas",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🛒 **Tienda** (Próximamente)",
-        value="`shop` - Tienda de objetos",
-        inline=False
-    )
-    
-    # Información del sistema
-    next_recovery = check_next_full_recovery()
-    embed.add_field(
-        name="⏰ **Sistema de Recuperación**",
-        value=f"• Todos los personajes se curan completamente cada **48 horas**\n"
-              f"• Próxima recuperación: **{next_recovery}**\n"
-              f"• Si mueres, revives automáticamente después de **48 horas**",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🎁 **Probabilidades Daily**",
-        value="• **Personaje S:** 3% (Legendario)\n"
-              "• **Personaje A:** 7% (Épico)\n"
-              "• **Personaje B:** 10% (Raro)\n"
-              "• **Personaje C:** 20% (Común)\n"
-              "• **Recursos:** 60% (Monedas/Pociones/Monstruos)",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="⚠️ **Sistema de Escalado**",
-        value="• Después de **10 combates en 1 hora**, los enemigos escalan **+5%**\n"
-              "• El escalado se acumula por cada 10 combates\n"
-              "• Se reinicia automáticamente cada **1 hora**\n"
-              "• Enemigos escalados dan **más monedas**",
-        inline=False
-    )
-    
-    await ctx.send(embed=embed)
-
-# ========== AÑADIR COMANDO DE INFORMACIÓN ESPECÍFICA ==========
 @bot.command(name='pvp', aliases=['versus', 'batalla'])
 async def pvp_info(ctx):
     """Información sobre el sistema de batallas amistosas"""
@@ -3018,21 +2833,7 @@ async def pvp_info(ctx):
     
     embed.set_footer(text="¡Usa t!game amistosa @usuario para comenzar!")
     await ctx.send(embed=embed)
-    
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
+
 # ========== COMANDOS DE ADMINISTRADOR ==========
 @bot.command(name='admin', aliases=['administrador', 'mod'])
 @commands.has_permissions(administrator=True)
@@ -4148,59 +3949,55 @@ async def emergency_command(ctx, action: str = None):
             
         except Exception as e:
             await ctx.send(f"❌ Error al crear backup: {str(e)}")
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
-#======================= ZONA DE ADMIN =======================================================
 
-
-# ========== EVENTOS DEL BOT ==========
-@bot.event
-async def on_ready():
-    print(f'✅ Bot conectado como {bot.user}')
-    print(f'👥 Conectado a {len(bot.guilds)} servidores')
+# ========== COMANDO HELP SIMPLIFICADO ==========
+@bot.command(name='help', aliases=['ayuda', 'comandos'])
+async def help_command(ctx, comando: str = None):
+    """Muestra todos los comandos disponibles"""
     
-    # Estadísticas del juego
-    print(f"🎮 Personajes totales: {len(ALL_CHARACTERS)}")
-    print(f"  • S: {len(S_CHARACTERS)} | A: {len(A_CHARACTERS)} | B: {len(B_CHARACTERS)} | C: {len(C_CHARACTERS)} | Iniciales: {len(STARTER_CHARACTERS)}")
-    print(f"🎲 Probabilidades Daily: S({CHARACTER_PROBABILITIES['S']}%) A({CHARACTER_PROBABILITIES['A']}%) B({CHARACTER_PROBABILITIES['B']}%) C({CHARACTER_PROBABILITIES['C']}%) Recursos({CHARACTER_PROBABILITIES['resources']}%)")
-    
-    # Iniciar tareas automáticas
-    if not reset_daily_tasks.is_running():
-        reset_daily_tasks.start()
-
-    if not reset_battle_counters.is_running():
-    reset_battle_counters.start()
-    
-    if not full_recovery_task.is_running():
-        full_recovery_task.start()
-    
-    await bot.change_presence(activity=discord.Activity(
-        type=discord.ActivityType.playing,
-        name="t!game start para jugar"
-    ))
-
-@bot.event
-async def on_command_error(ctx, error):
-    """Manejo de errores de comandos"""
-    if isinstance(error, commands.CommandNotFound):
-        return  # Ignorar comandos no encontrados
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"❌ Faltan argumentos. Usa `t!help {ctx.command}` para ayuda.")
+    if comando:
+        # Ayuda específica para un comando
+        cmd = bot.get_command(comando)
+        if not cmd:
+            await ctx.send(f"❌ Comando `{comando}` no encontrado")
+            return
+        
+        embed = discord.Embed(
+            title=f"📖 Ayuda: {cmd.name}",
+            color=discord.Color.green()
+        )
+        
+        if cmd.help:
+            embed.description = cmd.help
+        else:
+            embed.description = "Sin descripción disponible"
+        
+        if cmd.aliases:
+            embed.add_field(name="Alias", value=", ".join(cmd.aliases), inline=True)
+        
+        await ctx.send(embed=embed)
     else:
-        print(f"Error en comando {ctx.command}: {error}")
+        # Mostrar todos los comandos
+        embed = discord.Embed(
+            title="📚 Lista de Comandos - Prefijo: t!",
+            description="Usa `t!help <comando>` para más detalles",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="🎮 **Sistema de Juego**",
+            value="`t!game` - Sistema principal del juego\n"
+                  "`t!game start` - Comenzar aventura\n"
+                  "`t!game daily` - Recompensa diaria\n"
+                  "`t!game profile` - Ver tu perfil\n"
+                  "`t!game characters` - Tus personajes\n"
+                  "`t!game fight` - Pelear contra monstruos\n"
+                  "`t!game leaderboard` - Tabla de clasificación",
+            inline=False
+        )
+        
+        await ctx.send(embed=embed)
 
-#-------------------------------------------------------------------------------
 # ========== WEBSERVER PARA RENDER ==========
 from flask import Flask
 from threading import Thread
@@ -4224,7 +4021,7 @@ def keep_alive():
     server.start()
     print(f"🌐 Servidor web iniciado en puerto {os.environ.get('PORT', 8080)}")
 
-# ========== MODIFICAR on_ready ==========
+# ========== EVENTOS DEL BOT ==========
 @bot.event
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user}')
@@ -4238,6 +4035,9 @@ async def on_ready():
     # Iniciar tareas automáticas
     if not reset_daily_tasks.is_running():
         reset_daily_tasks.start()
+    
+    if not reset_battle_counters.is_running():
+        reset_battle_counters.start()
     
     if not full_recovery_task.is_running():
         full_recovery_task.start()
@@ -4256,8 +4056,15 @@ async def on_ready():
         name="t!game start para jugar"
     ))
 
-#---------------------------------------------------------------------------------
-
+@bot.event
+async def on_command_error(ctx, error):
+    """Manejo de errores de comandos"""
+    if isinstance(error, commands.CommandNotFound):
+        return  # Ignorar comandos no encontrados
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send(f"❌ Faltan argumentos. Usa `t!help {ctx.command}` para ayuda.")
+    else:
+        print(f"Error en comando {ctx.command}: {error}")
 
 # ========== INICIAR EL BOT ==========
 if __name__ == "__main__":
@@ -4274,9 +4081,6 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
-
-
-
 
 
 
