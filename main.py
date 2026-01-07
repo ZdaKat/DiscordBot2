@@ -898,16 +898,12 @@ async def game_main(ctx, action: str = None, *, args: str = None):
         await game_shop(ctx)
     elif action == "fight":
         await game_fight(ctx, args)
-    elif action == "heal":
-        await game_heal(ctx)
     elif action == "use":
         await game_use(ctx, args)
     elif action == "leaderboard":
         await game_leaderboard(ctx)
     elif action == "status":
         await game_status(ctx)
-    elif action == "revive":
-        await game_revive(ctx)
     elif action == "monsters":
         await game_monsters(ctx)
     elif action == "probabilities":
@@ -950,8 +946,7 @@ async def show_game_help(ctx):
     embed.add_field(
         name="⚔️ **Combate**",
         value="`fight <monstruo>` - Pelea contra un monstruo\n"
-              "`amistosa @usuario` - Batalla amistosa PvP\n"
-              "`heal` - Cura a tu personaje actual",
+              "`amistosa @usuario` - Batalla amistosa PvP",
         inline=False
     )
     
@@ -975,24 +970,12 @@ async def show_game_help(ctx):
         inline=False
     )
     
+    # ACTUALIZADO: Ahora solo usar 'use' para items
     embed.add_field(
         name="🧪 **Items**",
-        value="`use potion` - Usar poción de vida\n"
-              "`use revive` - Usar revivir\n"
+        value="`use potion` - Usar poción de vida (cura completo)\n"
+              "`use revive` - Usar revivir (revive si estás muerto)\n"
               "`inventory` - Ver tus items",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="💀 **Muerte**",
-        value="`revive` - Verifica si puedes revivir\n"
-              "⚠️ Si mueres, debes esperar 48 horas",
-        inline=False
-    )
-    
-    embed.add_field(
-        name="🛒 **Tienda** (Próximamente)",
-        value="`shop` - Tienda de objetos",
         inline=False
     )
     
@@ -1110,7 +1093,7 @@ async def game_daily(ctx):
             title="💀 ¡Estás muerto!",
             description=f"No puedes usar comandos mientras estás muerto.\n"
                        f"Tiempo para revivir: **{time_left}**\n\n"
-                       f"Usa `t!game revive` para verificar si ya puedes revivir.",
+                       f"Usa `t!game use revive` para verificar si ya puedes revivir.",
             color=discord.Color.dark_grey()
         )
         await ctx.send(embed=embed)
@@ -1242,7 +1225,7 @@ async def game_sdaily(ctx):
             title="💀 ¡Estás muerto!",
             description=f"No puedes usar comandos mientras estás muerto.\n"
                        f"Tiempo para revivir: **{time_left}**\n\n"
-                       f"Usa `t!game revive` para verificar si ya puedes revivir.",
+                       f"Usa `t!game use revive` si tienes uno disponible.",
             color=discord.Color.dark_grey()
         )
         await ctx.send(embed=embed)
@@ -1261,7 +1244,6 @@ async def game_sdaily(ctx):
     total_coins = 0
     total_heal = 0
     characters_unlocked = []
-    monster_appeared = False
     
     for i in range(3):
         character_reward, reward_type = get_random_character_reward()
@@ -1269,8 +1251,8 @@ async def game_sdaily(ctx):
         if reward_type == "resources":
             # Recursos normales (doble en sdaily)
             reward_subtype = random.choices(
-                ["coins", "potion", "monster"],
-                weights=[0.4, 0.3, 0.3],
+                ["coins", "potion", "monster", "revive"],
+                weights=[0.4, 0.3, 0.2, 0.1],
                 k=1
             )[0]
             
@@ -1280,18 +1262,20 @@ async def game_sdaily(ctx):
                 rewards.append(f"💰 {coins} monedas")
                 
             elif reward_subtype == "potion":
-                heal = random.randint(5, 20) * 2
-                total_heal += heal
-                rewards.append(f"❤️ Poción (+{heal} HP)")
+                potions = random.randint(1, 3) * 2
+                db.add_item(ctx.author.id, "potions", potions)
+                rewards.append(f"🧪 {potions} pociones")
+                
+            elif reward_subtype == "revive":
+                revives = 1  # Solo 1 revive
+                db.add_item(ctx.author.id, "revives", revives)
+                rewards.append(f"⚡ {revives} revivir")
                 
             else:  # monster
-                monster_appeared = True
-                # Solo un monstruo por sdaily
-                if i == 0:  # Solo el primero
-                    monster = get_random_monster()
-                    await start_battle_sdaily(ctx, player, monster)
-                    # Continuar con las otras recompensas después de la batalla
-                    
+                monster = get_random_monster()
+                # Para sdaily, solo mostramos info del monstruo, no iniciamos batalla
+                rewards.append(f"👹 {monster.name} (Usa `t!game fight` para luchar)")
+                
         else:
             # Personaje
             character = character_reward
@@ -1317,6 +1301,7 @@ async def game_sdaily(ctx):
             else:
                 # Nuevo personaje
                 characters_unlocked.append(character)
+                db.unlock_character(ctx.author.id, character.name)
                 
                 rarity_emojis = {
                     "S": "🌟",
@@ -1331,40 +1316,46 @@ async def game_sdaily(ctx):
     if total_coins > 0:
         db.add_coins(ctx.author.id, total_coins)
     
-    if total_heal > 0:
-        db.heal_player(ctx.author.id, total_heal)
+    # Obtener datos actualizados del jugador
+    player_after = db.get_player(ctx.author.id)
     
-    # Desbloquear personajes
-    for character in characters_unlocked:
-        db.unlock_character(ctx.author.id, character.name)
+    embed = discord.Embed(
+        title="🌟 Recompensa Especial Diaria",
+        description="¡Recompensas triples del daily!",
+        color=discord.Color.purple()
+    )
     
-    if not monster_appeared:
-        embed = discord.Embed(
-            title="🌟 Recompensa Especial Diaria",
-            description="¡Recompensas triples del daily!",
-            color=discord.Color.purple()
+    for i, reward in enumerate(rewards, 1):
+        embed.add_field(name=f"🎁 Recompensa {i}", value=reward, inline=True)
+    
+    # Añadir resumen
+    embed.add_field(
+        name="💰 Resumen de Ganancias",
+        value=f"**Monedas obtenidas:** +{total_coins}\n"
+              f"**Monedas totales:** {player_after['coins']}",
+        inline=False
+    )
+    
+    # Mostrar personajes desbloqueados
+    if characters_unlocked:
+        chars_list = "\n".join([f"• {char.name} ({char.rarity.value})" for char in characters_unlocked])
+        embed.add_field(
+            name="🎉 Personajes Desbloqueados",
+            value=chars_list,
+            inline=False
         )
-        
-        for i, reward in enumerate(rewards, 1):
-            embed.add_field(name=f"Recompensa {i}", value=reward, inline=True)
-        
-        if total_coins > 0:
-            player_after = db.get_player(ctx.author.id)
-            embed.add_field(name="💰 Monedas totales", value=f"{player_after['coins']}", inline=False)
-        
-        if total_heal > 0:
-            player_after = db.get_player(ctx.author.id)
-            embed.add_field(name="❤️ Vida actual", value=f"{player_after['character_stats']['current_hp']}/{player_after['character_stats']['max_hp']}", inline=False)
-        
-        if characters_unlocked:
-            embed.add_field(
-                name="🎉 Personajes Desbloqueados",
-                value="\n".join([f"• {char.name}" for char in characters_unlocked]),
-                inline=False
-            )
-        
-        embed.set_footer(text="¡Recompensa especial usada hoy!")
-        await ctx.send(embed=embed)
+    
+    # Mostrar inventario actualizado
+    inventory = player_after.get("inventory", {})
+    embed.add_field(
+        name="🎒 Inventario Actualizado",
+        value=f"**Pociones:** {inventory.get('potions', 0)}\n"
+              f"**Revivir:** {inventory.get('revives', 0)}",
+        inline=False
+    )
+    
+    embed.set_footer(text="¡Recompensa especial usada hoy!")
+    await ctx.send(embed=embed)
 
 async def start_battle_sdaily(ctx, player_data: Dict, monster: Monster) -> str:
     """Versión simplificada de batalla para sdaily"""
@@ -1438,7 +1429,13 @@ async def game_profile(ctx):
         await ctx.send("❌ No tienes un personaje. Usa `t!game start` para crear uno.")
         return
     
-    char_stats = player["character_stats"]
+    # Asegurarse de que todos los campos necesarios existan
+    if "character_stats" not in player:
+        await ctx.send("❌ Error en los datos del jugador. Contacta con un administrador.")
+        return
+    
+    char_stats = player.get("character_stats", {})
+    inventory = player.get("inventory", {})
     
     embed = discord.Embed(
         title=f"📊 Perfil de {ctx.author.display_name}",
@@ -1446,23 +1443,25 @@ async def game_profile(ctx):
     )
     
     # Barra de progreso de vida
-    hp_bar = create_progress_bar(char_stats["current_hp"], char_stats["max_hp"])
+    current_hp = char_stats.get("current_hp", 0)
+    max_hp = char_stats.get("max_hp", 1)
+    hp_bar = create_progress_bar(current_hp, max_hp)
     
     # Estado (vivo/muerto)
-    if player["is_dead"]:
+    if player.get("is_dead", False):
         embed.add_field(name="💀 Estado", value="**MUERTO**", inline=True)
         embed.add_field(name="⏰ Tiempo para revivir", value=f"{check_player_dead(player)[1]}", inline=True)
-        embed.add_field(name="🎭 Personaje actual", value=f"**{char_stats['name']}**", inline=True)
+        embed.add_field(name="🎭 Personaje actual", value=f"**{char_stats.get('name', 'Desconocido')}**", inline=True)
     else:
         embed.add_field(name="❤️ Estado", value="**VIVO**", inline=True)
-        embed.add_field(name="🎭 Personaje actual", value=f"**{char_stats['name']}**", inline=True)
-        embed.add_field(name="❤️ Vida", value=f"{char_stats['current_hp']}/{char_stats['max_hp']}\n{hp_bar}", inline=False)
+        embed.add_field(name="🎭 Personaje actual", value=f"**{char_stats.get('name', 'Desconocido')}**", inline=True)
+        embed.add_field(name="❤️ Vida", value=f"{current_hp}/{max_hp}\n{hp_bar}", inline=False)
     
-    embed.add_field(name="⚔️ Daño", value=f"{char_stats['min_damage']}-{char_stats['max_damage']}", inline=True)
-    embed.add_field(name="💰 Monedas", value=f"**{player['coins']}**", inline=True)
+    embed.add_field(name="⚔️ Daño", value=f"{char_stats.get('min_damage', 0)}-{char_stats.get('max_damage', 0)}", inline=True)
+    embed.add_field(name="💰 Monedas", value=f"**{player.get('coins', 0)}**", inline=True)
     
     if char_stats.get("special_effect"):
-        embed.add_field(name="✨ Efecto", value=char_stats["special_effect"], inline=False)
+        embed.add_field(name="✨ Efecto", value=char_stats.get("special_effect", "Ninguno"), inline=False)
     
     embed.add_field(name="👹 Monstruos Derrotados", value=f"**{player.get('monsters_defeated', 0)}**", inline=True)
     embed.add_field(name="💥 Daño Total", value=f"**{player.get('total_damage_dealt', 0)}**", inline=True)
@@ -1471,13 +1470,13 @@ async def game_profile(ctx):
     # Información diaria
     embed.add_field(
         name="📅 Progreso Diario",
-        value=f"**Daily:** {player['daily_uses_today']}/5 usados\n"
-              f"**Sdaily:** {'✅ Usado' if player['sdaily_used_today'] else '❌ Disponible'}",
+        value=f"**Daily:** {player.get('daily_uses_today', 0)}/5 usados\n"
+              f"**Sdaily:** {'✅ Usado' if player.get('sdaily_used_today', False) else '❌ Disponible'}",
         inline=False
     )
     
     # Última recuperación completa
-    last_recovery = player.get('last_full_recovery', player['created_at'])
+    last_recovery = player.get('last_full_recovery', player.get('created_at'))
     if isinstance(last_recovery, datetime):
         embed.add_field(
             name="⏰ Última Recuperación",
@@ -1492,7 +1491,6 @@ async def game_profile(ctx):
         inline=True
     )
 
-    inventory = player.get("inventory", {})
     embed.add_field(name="🧪 Pociones", value=f"{inventory.get('potions', 0)}", inline=True)
     embed.add_field(name="⚡ Revivir", value=f"{inventory.get('revives', 0)}", inline=True)
 
@@ -1502,7 +1500,7 @@ async def game_profile(ctx):
         scaling = battle_counter.get("scaling", 1.0)
         embed.add_field(name="⚠️ Escalado de enemigos", value=f"{int((scaling-1)*100)}%", inline=True)
     
-    embed.set_footer(text=f"Jugando desde {player['created_at'].strftime('%d/%m/%Y')}")
+    embed.set_footer(text=f"Jugando desde {player.get('created_at', datetime.utcnow()).strftime('%d/%m/%Y')}")
     await ctx.send(embed=embed)
 
 async def game_characters(ctx, args: str = None):
@@ -1752,7 +1750,7 @@ async def game_inventory(ctx):
         color=discord.Color.green()
     )
     
-    embed.add_field(name="💰 Monedas", value=f"{player['coins']} monedas", inline=True)
+    embed.add_field(name="💰 Monedas", value=f"{player.get('coins', 0)} monedas", inline=True)
     embed.add_field(name="🧪 Pociones", value=f"{inventory.get('potions', 0)}", inline=True)
     embed.add_field(name="⚡ Revivir", value=f"{inventory.get('revives', 0)}", inline=True)
     
@@ -1773,7 +1771,7 @@ async def game_inventory(ctx):
         inline=False
     )
     
-    embed.set_footer(text="Usa t!game use <item> para usar un item")
+    embed.set_footer(text="Usa `t!game use potion` o `t!game use revive` para usar items")
     await ctx.send(embed=embed)
 
 async def game_shop(ctx):
@@ -1826,7 +1824,7 @@ async def game_fight(ctx, monster_name: str = None):
             title="💀 ¡Estás muerto!",
             description=f"No puedes pelear mientras estás muerto.\n"
                        f"Tiempo para revivir: **{time_left}**\n\n"
-                       f"Usa `t!game revive` para verificar si ya puedes revivir.",
+                       f"Usa `t!game use revive` para verificar si ya puedes revivir.",
             color=discord.Color.dark_grey()
         )
         await ctx.send(embed=embed)
@@ -2692,7 +2690,7 @@ async def game_friendly(ctx, args: str = None):
         embed = discord.Embed(
             title="❌ Oponente está muerto",
             description=f"{opponent.display_name} está muerto y no puede combatir.\n\n"
-                       f"Debe revivir primero con `t!game revive` o esperar 48 horas.",
+                       f"Debe revivir primero con `t!game use revive` o esperar 48 horas.",
             color=discord.Color.dark_grey()
         )
         await ctx.send(embed=embed)
@@ -4081,6 +4079,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
