@@ -898,12 +898,16 @@ async def game_main(ctx, action: str = None, *, args: str = None):
         await game_shop(ctx)
     elif action == "fight":
         await game_fight(ctx, args)
+    elif action == "heal":
+        await game_heal(ctx)
     elif action == "use":
         await game_use(ctx, args)
     elif action == "leaderboard":
         await game_leaderboard(ctx)
     elif action == "status":
         await game_status(ctx)
+    elif action == "revive":
+        await game_revive(ctx)
     elif action == "monsters":
         await game_monsters(ctx)
     elif action == "probabilities":
@@ -946,7 +950,8 @@ async def show_game_help(ctx):
     embed.add_field(
         name="⚔️ **Combate**",
         value="`fight <monstruo>` - Pelea contra un monstruo\n"
-              "`amistosa @usuario` - Batalla amistosa PvP",
+              "`amistosa @usuario` - Batalla amistosa PvP\n"
+              "`heal` - Cura a tu personaje actual",
         inline=False
     )
     
@@ -970,12 +975,24 @@ async def show_game_help(ctx):
         inline=False
     )
     
-    # ACTUALIZADO: Ahora solo usar 'use' para items
     embed.add_field(
         name="🧪 **Items**",
-        value="`use potion` - Usar poción de vida (cura completo)\n"
-              "`use revive` - Usar revivir (revive si estás muerto)\n"
+        value="`use potion` - Usar poción de vida\n"
+              "`use revive` - Usar revivir\n"
               "`inventory` - Ver tus items",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="💀 **Muerte**",
+        value="`revive` - Verifica si puedes revivir\n"
+              "⚠️ Si mueres, debes esperar 48 horas",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🛒 **Tienda** (Próximamente)",
+        value="`shop` - Tienda de objetos",
         inline=False
     )
     
@@ -1093,7 +1110,7 @@ async def game_daily(ctx):
             title="💀 ¡Estás muerto!",
             description=f"No puedes usar comandos mientras estás muerto.\n"
                        f"Tiempo para revivir: **{time_left}**\n\n"
-                       f"Usa `t!game use revive` si tienes uno disponible.",
+                       f"Usa `t!game revive` para verificar si ya puedes revivir.",
             color=discord.Color.dark_grey()
         )
         await ctx.send(embed=embed)
@@ -1118,8 +1135,8 @@ async def game_daily(ctx):
     if reward_type == "resources":
         # Recursos normales (60% probabilidad)
         reward_subtype = random.choices(
-            ["coins", "potion", "monster", "revive"],
-            weights=[0.4, 0.3, 0.2, 0.1],
+            ["coins", "potion", "monster", "revive"],  # Añadir revive
+            weights=[0.4, 0.3, 0.2, 0.1],  # Ajustar pesos
             k=1
         )[0]
         
@@ -1128,28 +1145,27 @@ async def game_daily(ctx):
             db.add_coins(ctx.author.id, coins)
             embed.description = f"Has encontrado **{coins} monedas** 💰"
             embed.add_field(name="💸 Monedas totales", value=f"{player['coins'] + coins}", inline=True)
-            embed.set_footer(text=f"Usos diarios hoy: {player['daily_uses_today'] + 1}/5 • Recurso normal")
-            
         elif reward_subtype == "potion":
             potions = random.randint(1, 3)
             db.add_item(ctx.author.id, "potions", potions)
             embed.description = f"Has encontrado **{potions} pociones** ❤️"
+            # Mostrar inventario actualizado
             player_after = db.get_player(ctx.author.id)
-            embed.add_field(name="🧪 Pociones totales", value=f"{player_after['inventory']['potions']}", inline=True)
-            embed.set_footer(text=f"Usos diarios hoy: {player['daily_uses_today'] + 1}/5 • Recurso normal")
+            embed.add_field(name="🧪 Pociones", value=f"{player_after['inventory']['potions']}", inline=True)
             
         elif reward_subtype == "revive":
             revives = 1  # Solo dar uno, es raro
             db.add_item(ctx.author.id, "revives", revives)
             embed.description = f"Has encontrado **{revives} revivir** ⚡"
             player_after = db.get_player(ctx.author.id)
-            embed.add_field(name="⚡ Revivir totales", value=f"{player_after['inventory']['revives']}", inline=True)
-            embed.set_footer(text=f"Usos diarios hoy: {player['daily_uses_today'] + 1}/5 • Recurso normal")
+            embed.add_field(name="⚡ Revivir", value=f"{player_after['inventory']['revives']}", inline=True)
             
         else:  # monster
             monster = get_random_monster()
             await start_battle(ctx, player, monster)
             return  # La batalla manejará su propio mensaje
+        
+        embed.set_footer(text=f"Usos diarios hoy: {player['daily_uses_today'] + 1}/5 • Recurso normal")
         
     else:
         # ¡Personaje desbloqueado!
@@ -1175,7 +1191,6 @@ async def game_daily(ctx):
             embed.description = f"🎉 **¡Ya tenías a {character.name}!**\nRecibes {coins_reward} monedas en su lugar."
             embed.add_field(name="💸 Monedas totales", value=f"{player['coins'] + coins_reward}", inline=True)
             embed.add_field(name="⭐ Rareza", value=character.rarity.value, inline=True)
-            embed.set_footer(text=f"Usos diarios hoy: {player['daily_uses_today'] + 1}/5 • Personaje {reward_type}")
             
         else:
             # Desbloquear nuevo personaje
@@ -1207,8 +1222,8 @@ async def game_daily(ctx):
                 value=f"Usa `t!game switch {character.name}` para cambiarte a este personaje",
                 inline=False
             )
-            
-            embed.set_footer(text=f"Usos diarios hoy: {player['daily_uses_today'] + 1}/5 • Personaje {reward_type}")
+        
+        embed.set_footer(text=f"Usos diarios hoy: {player['daily_uses_today'] + 1}/5 • Personaje {reward_type}")
     
     await ctx.send(embed=embed)
 
@@ -1227,7 +1242,7 @@ async def game_sdaily(ctx):
             title="💀 ¡Estás muerto!",
             description=f"No puedes usar comandos mientras estás muerto.\n"
                        f"Tiempo para revivir: **{time_left}**\n\n"
-                       f"Usa `t!game use revive` si tienes uno disponible.",
+                       f"Usa `t!game revive` para verificar si ya puedes revivir.",
             color=discord.Color.dark_grey()
         )
         await ctx.send(embed=embed)
@@ -1244,9 +1259,9 @@ async def game_sdaily(ctx):
     # Generar 3 recompensas (triple daily)
     rewards = []
     total_coins = 0
-    potions_gained = 0
-    revives_gained = 0
+    total_heal = 0
     characters_unlocked = []
+    monster_appeared = False
     
     for i in range(3):
         character_reward, reward_type = get_random_character_reward()
@@ -1254,32 +1269,29 @@ async def game_sdaily(ctx):
         if reward_type == "resources":
             # Recursos normales (doble en sdaily)
             reward_subtype = random.choices(
-                ["coins", "potion", "monster", "revive"],
-                weights=[0.4, 0.3, 0.2, 0.1],
+                ["coins", "potion", "monster"],
+                weights=[0.4, 0.3, 0.3],
                 k=1
             )[0]
             
             if reward_subtype == "coins":
-                coins = random.randint(10, 200)  # Doble de normal
+                coins = random.randint(5, 100) * 2
                 total_coins += coins
-                rewards.append(f"💰 **{coins} monedas**")
+                rewards.append(f"💰 {coins} monedas")
                 
             elif reward_subtype == "potion":
-                potions = 2  # Siempre 2 en sdaily
-                potions_gained += potions
-                db.add_item(ctx.author.id, "potions", potions)
-                rewards.append(f"🧪 **{potions} pociones**")
-                
-            elif reward_subtype == "revive":
-                revives = 1  # Solo 1 revive
-                revives_gained += revives
-                db.add_item(ctx.author.id, "revives", revives)
-                rewards.append(f"⚡ **{revives} revivir**")
+                heal = random.randint(5, 20) * 2
+                total_heal += heal
+                rewards.append(f"❤️ Poción (+{heal} HP)")
                 
             else:  # monster
-                monster = get_random_monster()
-                rewards.append(f"👹 **{monster.name}** (Usa `t!game fight` para luchar)")
-                
+                monster_appeared = True
+                # Solo un monstruo por sdaily
+                if i == 0:  # Solo el primero
+                    monster = get_random_monster()
+                    await start_battle_sdaily(ctx, player, monster)
+                    # Continuar con las otras recompensas después de la batalla
+                    
         else:
             # Personaje
             character = character_reward
@@ -1301,11 +1313,10 @@ async def game_sdaily(ctx):
                 }[reward_type]
                 
                 total_coins += coins_reward
-                rewards.append(f"💰 **{coins_reward} monedas** (Personaje duplicado: {character.name})")
+                rewards.append(f"💰 {coins_reward} monedas (Personaje duplicado)")
             else:
                 # Nuevo personaje
                 characters_unlocked.append(character)
-                db.unlock_character(ctx.author.id, character.name)
                 
                 rarity_emojis = {
                     "S": "🌟",
@@ -1314,72 +1325,110 @@ async def game_sdaily(ctx):
                     "C": "🔹"
                 }
                 
-                rewards.append(f"{rarity_emojis[reward_type]} **{character.name}** ({reward_type})")
+                rewards.append(f"{rarity_emojis[reward_type]} {character.name} ({reward_type})")
     
-    # Aplicar recompensas acumuladas de monedas
+    # Aplicar recompensas acumuladas
     if total_coins > 0:
         db.add_coins(ctx.author.id, total_coins)
     
-    # Obtener datos actualizados del jugador
-    player_after = db.get_player(ctx.author.id)
+    if total_heal > 0:
+        db.heal_player(ctx.author.id, total_heal)
     
-    # Crear embed principal
-    embed = discord.Embed(
-        title="🌟 RECOMPENSA ESPECIAL DIARIA",
-        description="¡Has recibido 3 recompensas especiales del daily!",
-        color=discord.Color.purple()
-    )
+    # Desbloquear personajes
+    for character in characters_unlocked:
+        db.unlock_character(ctx.author.id, character.name)
     
-    # Añadir recompensas
-    for i, reward in enumerate(rewards, 1):
-        embed.add_field(name=f"🎁 **Recompensa {i}**", value=reward, inline=False)
-    
-    # Resumen de ganancias
-    summary_text = []
-    
-    if total_coins > 0:
-        summary_text.append(f"💰 **+{total_coins} monedas**")
-    
-    if potions_gained > 0:
-        summary_text.append(f"🧪 **+{potions_gained} pociones**")
-    
-    if revives_gained > 0:
-        summary_text.append(f"⚡ **+{revives_gained} revivir**")
-    
-    if characters_unlocked:
-        summary_text.append(f"🎭 **+{len(characters_unlocked)} personajes nuevos**")
-    
-    if summary_text:
-        embed.add_field(
-            name="📊 **RESUMEN DE GANANCIAS**",
-            value="\n".join(summary_text),
-            inline=False
+    if not monster_appeared:
+        embed = discord.Embed(
+            title="🌟 Recompensa Especial Diaria",
+            description="¡Recompensas triples del daily!",
+            color=discord.Color.purple()
         )
-    
-    # Información del inventario actualizado
-    inventory = player_after.get("inventory", {})
-    embed.add_field(
-        name="🎒 **INVENTARIO ACTUALIZADO**",
-        value=f"**Monedas:** {player_after['coins']} 💰\n"
-              f"**Pociones:** {inventory.get('potions', 0)} 🧪\n"
-              f"**Revivir:** {inventory.get('revives', 0)} ⚡",
-        inline=False
-    )
-    
-    # Si se desbloquearon personajes, mostrar detalles
-    if characters_unlocked:
-        chars_details = []
-        for char in characters_unlocked:
-            chars_details.append(f"• **{char.name}** ({char.rarity.value})")
         
-        embed.add_field(
-            name="🎉 **PERSONAJES DESBLOQUEADOS**",
-            value="\n".join(chars_details),
-            inline=False
-        )
+        for i, reward in enumerate(rewards, 1):
+            embed.add_field(name=f"Recompensa {i}", value=reward, inline=True)
+        
+        if total_coins > 0:
+            player_after = db.get_player(ctx.author.id)
+            embed.add_field(name="💰 Monedas totales", value=f"{player_after['coins']}", inline=False)
+        
+        if total_heal > 0:
+            player_after = db.get_player(ctx.author.id)
+            embed.add_field(name="❤️ Vida actual", value=f"{player_after['character_stats']['current_hp']}/{player_after['character_stats']['max_hp']}", inline=False)
+        
+        if characters_unlocked:
+            embed.add_field(
+                name="🎉 Personajes Desbloqueados",
+                value="\n".join([f"• {char.name}" for char in characters_unlocked]),
+                inline=False
+            )
+        
+        embed.set_footer(text="¡Recompensa especial usada hoy!")
+        await ctx.send(embed=embed)
+
+async def start_battle_sdaily(ctx, player_data: Dict, monster: Monster) -> str:
+    """Versión simplificada de batalla para sdaily"""
+    player = player_data["character_stats"]
     
-    embed.set_footer(text="¡Recompensa especial usada hoy! • Vuelve mañana para más recompensas")
-    await ctx.send(embed=embed)
+    # Verificar que el jugador esté vivo
+    if player_data.get("is_dead", False):
+        return "player_dead"
+    
+    # Aplicar efecto del monstruo
+    effect, effect_message = apply_monster_effect(monster)
+    
+    # Efectos que ganan automáticamente
+    if effect in [BattleEffect.SLEEP, BattleEffect.FEAR]:
+        # Victoria automática
+        db.update_player(ctx.author.id, {
+            "monsters_defeated": player_data.get("monsters_defeated", 0) + 1
+        })
+        db.add_coins(ctx.author.id, monster.coins_reward)
+        
+        embed = discord.Embed(
+            title=f"🎉 ¡Victoria Automática!",
+            description=f"{effect_message}\n\nHas derrotado a **{monster.name}** sin pelear.",
+            color=discord.Color.green()
+        )
+        
+        embed.add_field(name="💰 Recompensa", value=f"{monster.coins_reward} monedas", inline=True)
+        embed.add_field(name="👹 Monstruo", value=f"{monster.name}", inline=True)
+        
+        await ctx.send(embed=embed)
+        return "auto_win"
+    
+    # Efecto Instakill
+    elif effect == BattleEffect.INSTAKILL:
+        db.kill_player(ctx.author.id)
+        
+        embed = discord.Embed(
+            title="💀 ¡INSTAKILL!",
+            description=f"{effect_message}\n\n**{monster.name}** te ha matado instantáneamente.\n\n"
+                       f"**⚠️ Deberás esperar 48 horas para revivir.**",
+            color=discord.Color.dark_red()
+        )
+        
+        await ctx.send(embed=embed)
+        return "instakill"
+    
+    # Para otros efectos, solo mostrar info
+    elif effect != BattleEffect.NONE:
+        embed = discord.Embed(
+            title="⚔️ ¡Encontraste un monstruo!",
+            description=f"**{monster.name}** apareció durante tu recompensa especial.\n\n"
+                       f"{effect_message}\n\n"
+                       f"Usa `t!game fight` si quieres pelear contra él.",
+            color=discord.Color.orange()
+        )
+        
+        embed.add_field(name="❤️ Vida", value=f"{monster.hp} HP", inline=True)
+        embed.add_field(name="⚔️ Daño", value=f"{monster.min_damage}-{monster.max_damage}", inline=True)
+        embed.add_field(name="💰 Recompensa", value=f"{monster.coins_reward} monedas", inline=True)
+        
+        await ctx.send(embed=embed)
+        return "monster_info"
+    
+    return "normal_monster"
 
 async def game_profile(ctx):
     """Muestra el perfil del jugador"""
@@ -1389,13 +1438,7 @@ async def game_profile(ctx):
         await ctx.send("❌ No tienes un personaje. Usa `t!game start` para crear uno.")
         return
     
-    # Asegurarse de que todos los campos necesarios existan
-    if "character_stats" not in player:
-        await ctx.send("❌ Error en los datos del jugador. Contacta con un administrador.")
-        return
-    
-    char_stats = player.get("character_stats", {})
-    inventory = player.get("inventory", {})
+    char_stats = player["character_stats"]
     
     embed = discord.Embed(
         title=f"📊 Perfil de {ctx.author.display_name}",
@@ -1403,25 +1446,23 @@ async def game_profile(ctx):
     )
     
     # Barra de progreso de vida
-    current_hp = char_stats.get("current_hp", 0)
-    max_hp = char_stats.get("max_hp", 1)
-    hp_bar = create_progress_bar(current_hp, max_hp)
+    hp_bar = create_progress_bar(char_stats["current_hp"], char_stats["max_hp"])
     
     # Estado (vivo/muerto)
-    if player.get("is_dead", False):
+    if player["is_dead"]:
         embed.add_field(name="💀 Estado", value="**MUERTO**", inline=True)
         embed.add_field(name="⏰ Tiempo para revivir", value=f"{check_player_dead(player)[1]}", inline=True)
-        embed.add_field(name="🎭 Personaje actual", value=f"**{char_stats.get('name', 'Desconocido')}**", inline=True)
+        embed.add_field(name="🎭 Personaje actual", value=f"**{char_stats['name']}**", inline=True)
     else:
         embed.add_field(name="❤️ Estado", value="**VIVO**", inline=True)
-        embed.add_field(name="🎭 Personaje actual", value=f"**{char_stats.get('name', 'Desconocido')}**", inline=True)
-        embed.add_field(name="❤️ Vida", value=f"{current_hp}/{max_hp}\n{hp_bar}", inline=False)
+        embed.add_field(name="🎭 Personaje actual", value=f"**{char_stats['name']}**", inline=True)
+        embed.add_field(name="❤️ Vida", value=f"{char_stats['current_hp']}/{char_stats['max_hp']}\n{hp_bar}", inline=False)
     
-    embed.add_field(name="⚔️ Daño", value=f"{char_stats.get('min_damage', 0)}-{char_stats.get('max_damage', 0)}", inline=True)
-    embed.add_field(name="💰 Monedas", value=f"**{player.get('coins', 0)}**", inline=True)
+    embed.add_field(name="⚔️ Daño", value=f"{char_stats['min_damage']}-{char_stats['max_damage']}", inline=True)
+    embed.add_field(name="💰 Monedas", value=f"**{player['coins']}**", inline=True)
     
     if char_stats.get("special_effect"):
-        embed.add_field(name="✨ Efecto", value=char_stats.get("special_effect", "Ninguno"), inline=False)
+        embed.add_field(name="✨ Efecto", value=char_stats["special_effect"], inline=False)
     
     embed.add_field(name="👹 Monstruos Derrotados", value=f"**{player.get('monsters_defeated', 0)}**", inline=True)
     embed.add_field(name="💥 Daño Total", value=f"**{player.get('total_damage_dealt', 0)}**", inline=True)
@@ -1430,13 +1471,13 @@ async def game_profile(ctx):
     # Información diaria
     embed.add_field(
         name="📅 Progreso Diario",
-        value=f"**Daily:** {player.get('daily_uses_today', 0)}/5 usados\n"
-              f"**Sdaily:** {'✅ Usado' if player.get('sdaily_used_today', False) else '❌ Disponible'}",
+        value=f"**Daily:** {player['daily_uses_today']}/5 usados\n"
+              f"**Sdaily:** {'✅ Usado' if player['sdaily_used_today'] else '❌ Disponible'}",
         inline=False
     )
     
     # Última recuperación completa
-    last_recovery = player.get('last_full_recovery', player.get('created_at'))
+    last_recovery = player.get('last_full_recovery', player['created_at'])
     if isinstance(last_recovery, datetime):
         embed.add_field(
             name="⏰ Última Recuperación",
@@ -1451,6 +1492,7 @@ async def game_profile(ctx):
         inline=True
     )
 
+    inventory = player.get("inventory", {})
     embed.add_field(name="🧪 Pociones", value=f"{inventory.get('potions', 0)}", inline=True)
     embed.add_field(name="⚡ Revivir", value=f"{inventory.get('revives', 0)}", inline=True)
 
@@ -1460,7 +1502,7 @@ async def game_profile(ctx):
         scaling = battle_counter.get("scaling", 1.0)
         embed.add_field(name="⚠️ Escalado de enemigos", value=f"{int((scaling-1)*100)}%", inline=True)
     
-    embed.set_footer(text=f"Jugando desde {player.get('created_at', datetime.utcnow()).strftime('%d/%m/%Y')}")
+    embed.set_footer(text=f"Jugando desde {player['created_at'].strftime('%d/%m/%Y')}")
     await ctx.send(embed=embed)
 
 async def game_characters(ctx, args: str = None):
@@ -1703,100 +1745,35 @@ async def game_inventory(ctx):
         await ctx.send("❌ No tienes un personaje. Usa `t!game start` para crear uno.")
         return
     
-    # Asegurar que el campo inventory exista
-    if "inventory" not in player:
-        # Si no existe, inicializarlo
-        db.update_player(ctx.author.id, {"inventory": {"potions": 0, "revives": 0}})
-        # Recargar datos del jugador
-        player = db.get_player(ctx.author.id)
-    
     inventory = player.get("inventory", {})
-    potions = inventory.get("potions", 0)
-    revives = inventory.get("revives", 0)
-    coins = player.get("coins", 0)
     
     embed = discord.Embed(
-        title=f"🎒 Inventario de {ctx.author.display_name}",
+        title="🎒 Tu Inventario",
         color=discord.Color.green()
     )
     
-    # Mostrar monedas
-    embed.add_field(
-        name="💰 **Monedas**",
-        value=f"**{coins}** monedas",
-        inline=True
-    )
+    embed.add_field(name="💰 Monedas", value=f"{player['coins']} monedas", inline=True)
+    embed.add_field(name="🧪 Pociones", value=f"{inventory.get('potions', 0)}", inline=True)
+    embed.add_field(name="⚡ Revivir", value=f"{inventory.get('revives', 0)}", inline=True)
     
-    # Mostrar pociones
-    if potions > 0:
-        embed.add_field(
-            name="🧪 **Pociones**",
-            value=f"**{potions}** disponible(s)\nUsa con: `t!game use potion`",
-            inline=True
-        )
-    else:
-        embed.add_field(
-            name="🧪 **Pociones**",
-            value="**0** disponible(s)\nObtén con: `t!game daily`",
-            inline=True
-        )
-    
-    # Mostrar revivir
-    if revives > 0:
-        embed.add_field(
-            name="⚡ **Revivir**",
-            value=f"**{revives}** disponible(s)\nUsa con: `t!game use revive`",
-            inline=True
-        )
-    else:
-        embed.add_field(
-            name="⚡ **Revivir**",
-            value="**0** disponible(s)\nObtén con: `t!game daily`",
-            inline=True
-        )
-    
-    # Mostrar contador de batallas
+    # Mostrar contador de batallas y escalado
     battle_counter = player.get("battle_counter", {})
     count = battle_counter.get("count", 0)
     scaling = battle_counter.get("scaling", 1.0)
     
-    embed.add_field(
-        name="⚔️ **Combates (última hora)**",
-        value=f"**{count}** combates",
-        inline=True
-    )
+    embed.add_field(name="⚔️ Combates en la última hora", value=f"{count}", inline=True)
     
     if scaling > 1.0:
-        embed.add_field(
-            name="⚠️ **Escalado de enemigos**",
-            value=f"**+{int((scaling-1)*100)}%** más difíciles",
-            inline=True
-        )
-    else:
-        embed.add_field(
-            name="📊 **Escalado**",
-            value="**Normal** (sin escalado)",
-            inline=True
-        )
+        embed.add_field(name="⚠️ Escalado de enemigos", value=f"+{int((scaling-1)*100)}%", inline=True)
     
     # Información de personajes
-    characters_unlocked = player.get("characters_unlocked", 1)
     embed.add_field(
-        name="👥 **Personajes Desbloqueados**",
-        value=f"**{characters_unlocked}/{len(ALL_CHARACTERS)}** personajes",
+        name="👥 Personajes Desbloqueados",
+        value=f"{player.get('characters_unlocked', 1)}/{len(ALL_CHARACTERS)} personajes",
         inline=False
     )
     
-    # Consejos de uso
-    embed.add_field(
-        name="📝 **¿Cómo usar items?**",
-        value="• `t!game use potion` - Cura completamente a tu personaje actual\n"
-              "• `t!game use revive` - Revive si estás muerto (consumible)\n"
-              "• `t!game daily` - Obtiene items aleatorios (5 usos/día)",
-        inline=False
-    )
-    
-    embed.set_footer(text="¡Recuerda usar tus items estratégicamente!")
+    embed.set_footer(text="Usa t!game use <item> para usar un item")
     await ctx.send(embed=embed)
 
 async def game_shop(ctx):
@@ -1849,7 +1826,7 @@ async def game_fight(ctx, monster_name: str = None):
             title="💀 ¡Estás muerto!",
             description=f"No puedes pelear mientras estás muerto.\n"
                        f"Tiempo para revivir: **{time_left}**\n\n"
-                       f"Usa `t!game use revive` si tienes uno disponible.",
+                       f"Usa `t!game revive` para verificar si ya puedes revivir.",
             color=discord.Color.dark_grey()
         )
         await ctx.send(embed=embed)
@@ -1857,7 +1834,7 @@ async def game_fight(ctx, monster_name: str = None):
     
     # Verificar que el jugador tenga vida
     if player["character_stats"]["current_hp"] <= 0:
-        await ctx.send("❌ Tu personaje no tiene vida. Usa `t!game use potion` para curarte.")
+        await ctx.send("❌ Tu personaje no tiene vida. Usa `t!game heal` para curarte.")
         return
     
     # Obtener monstruo aleatorio o específico
@@ -2072,6 +2049,70 @@ async def start_battle(ctx, player_data: Dict, monster: Monster):
         await battle_msg.edit(embed=embed)
 
         db.update_battle_counter(ctx.author.id)
+
+async def game_heal(ctx):
+    """Cura al personaje actual usando una poción"""
+    player = db.get_player(ctx.author.id)
+    
+    if not player:
+        await ctx.send("❌ No tienes un personaje. Usa `t!game start` para crear uno.")
+        return
+    
+    # Verificar si está muerto
+    is_dead, time_left = check_player_dead(player)
+    if is_dead:
+        embed = discord.Embed(
+            title="💀 ¡Estás muerto!",
+            description=f"No puedes curarte mientras estás muerto.\n"
+                       f"Tiempo para revivir: **{time_left}**\n\n"
+                       f"Usa `t!game use revive` si tienes un revivir.",
+            color=discord.Color.dark_grey()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    char_stats = player["character_stats"]
+    
+    # Verificar si ya tiene vida completa
+    if char_stats["current_hp"] >= char_stats["max_hp"]:
+        embed = discord.Embed(
+            title="❤️ Vida Completa",
+            description=f"**{char_stats['name']}** ya tiene toda su vida.",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Vida Actual", value=f"{char_stats['current_hp']}/{char_stats['max_hp']} HP")
+        await ctx.send(embed=embed)
+        return
+    
+    # Verificar si tiene pociones
+    if player["inventory"]["potions"] <= 0:
+        embed = discord.Embed(
+            title="❌ Sin Pociones",
+            description="Necesitas al menos una poción para curarte.\n"
+                       "Puedes obtener pociones en `t!game daily`.",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Usar una poción y curar completamente
+    db.use_item(ctx.author.id, "potions", 1)
+    db.heal_character(ctx.author.id)
+    
+    # Obtener datos actualizados
+    player_after = db.get_player(ctx.author.id)
+    
+    embed = discord.Embed(
+        title="❤️ ¡Curado Completamente!",
+        description=f"**{char_stats['name']}** ha sido curado usando una poción.",
+        color=discord.Color.green()
+    )
+    
+    embed.add_field(name="Vida Anterior", value=f"{char_stats['current_hp']}/{char_stats['max_hp']} HP", inline=True)
+    embed.add_field(name="Vida Actual", value=f"{player_after['character_stats']['current_hp']}/{player_after['character_stats']['max_hp']} HP", inline=True)
+    embed.add_field(name="🧪 Pociones restantes", value=f"{player_after['inventory']['potions']}", inline=True)
+    
+    await ctx.send(embed=embed)
 
 async def game_use(ctx, args: str):
     """Usa un item del inventario"""
@@ -2317,6 +2358,81 @@ async def game_status(ctx):
     except Exception as e:
         await ctx.send(f"❌ Error al obtener el estado: {str(e)}")
 
+async def game_revive(ctx):
+    """Verifica si el jugador puede revivir"""
+    player = db.get_player(ctx.author.id)
+    
+    if not player:
+        await ctx.send("❌ No tienes un personaje. Usa `t!game start` para crear uno.")
+        return
+    
+    # Verificar si está muerto
+    if not player["is_dead"]:
+        embed = discord.Embed(
+            title="❤️ ¡Estás vivo!",
+            description="No necesitas revivir, ya estás vivo.",
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    death_time = player["death_time"]
+    if not death_time:
+        # Si no hay tiempo de muerte, revivir inmediatamente
+        db.revive_player(ctx.author.id)
+        
+        embed = discord.Embed(
+            title="✨ ¡Revivido!",
+            description="Has sido revivido exitosamente.",
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Calcular tiempo restante
+    revive_time = death_time + timedelta(days=2)
+    time_left = revive_time - datetime.utcnow()
+    
+    if time_left.total_seconds() <= 0:
+        # ¡Puede revivir!
+        db.revive_player(ctx.author.id)
+        
+        embed = discord.Embed(
+            title="✨ ¡Revivido!",
+            description="Has sido revivido exitosamente. ¡Bienvenido de nuevo!",
+            color=discord.Color.green()
+        )
+        
+        player_after = db.get_player(ctx.author.id)
+        embed.add_field(name="❤️ Vida", value=f"{player_after['character_stats']['current_hp']}/{player_after['character_stats']['max_hp']} HP")
+        
+        await ctx.send(embed=embed)
+    else:
+        # Aún no puede revivir
+        hours = int(time_left.total_seconds() // 3600)
+        minutes = int((time_left.total_seconds() % 3600) // 60)
+        seconds = int(time_left.total_seconds() % 60)
+        
+        embed = discord.Embed(
+            title="💀 Aún no puedes revivir",
+            description=f"Debes esperar **{hours}h {minutes}m {seconds}s** para revivir.",
+            color=discord.Color.dark_grey()
+        )
+        
+        embed.add_field(
+            name="⏰ Tiempo de Muerte",
+            value=death_time.strftime("%d/%m/%Y %H:%M:%S"),
+            inline=True
+        )
+        
+        embed.add_field(
+            name="⏰ Tiempo de Revivir",
+            value=revive_time.strftime("%d/%m/%Y %H:%M:%S"),
+            inline=True
+        )
+        
+        await ctx.send(embed=embed)
+
 async def game_monsters(ctx):
     """Muestra la lista de monstruos disponibles"""
     embed = discord.Embed(
@@ -2388,6 +2504,1499 @@ async def game_probabilities(ctx):
     
     embed.set_footer(text="Las probabilidades pueden cambiar en futuras actualizaciones")
     await ctx.send(embed=embed)
+
+async def start_friendly_battle(ctx, player_data: Dict, opponent_data: Dict, opponent_user: discord.Member):
+    """Inicia una batalla amistosa entre dos jugadores"""
+    player_stats = player_data["character_stats"]
+    opponent_stats = opponent_data["character_stats"]
+    
+    # Crear embed inicial de batalla amistosa
+    embed = discord.Embed(
+        title="🤝 ¡BATALLA AMISTOSA!",
+        description=f"**{player_stats['name']}** ({ctx.author.display_name}) vs **{opponent_stats['name']}** ({opponent_user.display_name})",
+        color=discord.Color.blue()
+    )
+    
+    embed.add_field(name=f"❤️ {ctx.author.display_name}", 
+                   value=f"{player_stats['name']}\nVida: {player_stats['current_hp']}/{player_stats['max_hp']} HP\nDaño: {player_stats['min_damage']}-{player_stats['max_damage']}", 
+                   inline=True)
+    
+    embed.add_field(name="⚔️ vs", value="\n\n🤝\n\n", inline=True)
+    
+    embed.add_field(name=f"❤️ {opponent_user.display_name}", 
+                   value=f"{opponent_stats['name']}\nVida: {opponent_stats['current_hp']}/{opponent_stats['max_hp']} HP\nDaño: {opponent_stats['min_damage']}-{opponent_stats['max_damage']}", 
+                   inline=True)
+    
+    embed.set_footer(text="¡Buena suerte a ambos! Esta batalla no afecta la vida real de los personajes.")
+    
+    battle_msg = await ctx.send(embed=embed)
+    await asyncio.sleep(2)
+    
+    # Iniciar batalla con vidas temporales
+    player_temp_hp = player_stats["max_hp"]
+    opponent_temp_hp = opponent_stats["max_hp"]
+    
+    battle_log = []
+    turn = 1
+    max_turns = 20  # Límite de turnos para evitar bucles infinitos
+    
+    while player_temp_hp > 0 and opponent_temp_hp > 0 and turn <= max_turns:
+        # Turno del jugador
+        player_damage = random.randint(player_stats["min_damage"], player_stats["max_damage"])
+        opponent_temp_hp -= player_damage
+        battle_log.append(f"**Turno {turn}:** {player_stats['name']} ataca a {opponent_stats['name']} por **{player_damage}** daño.")
+        
+        if opponent_temp_hp <= 0:
+            break
+        
+        # Turno del oponente
+        opponent_damage = random.randint(opponent_stats["min_damage"], opponent_stats["max_damage"])
+        player_temp_hp -= opponent_damage
+        battle_log.append(f"**Turno {turn}:** {opponent_stats['name']} contraataca por **{opponent_damage}** daño.")
+        
+        # Actualizar embed cada 2 turnos para no spammear
+        if turn % 2 == 0:
+            embed = discord.Embed(
+                title="🤝 ¡BATALLA AMISTOSA!",
+                color=discord.Color.blue()
+            )
+            
+            # Barra de vida temporal
+            player_hp_bar = create_progress_bar(player_temp_hp, player_stats["max_hp"])
+            opponent_hp_bar = create_progress_bar(opponent_temp_hp, opponent_stats["max_hp"])
+            
+            embed.add_field(name=f"❤️ {ctx.author.display_name}", 
+                           value=f"{player_stats['name']}\n{player_hp_bar}\n{player_temp_hp}/{player_stats['max_hp']} HP", 
+                           inline=True)
+            
+            embed.add_field(name="⚔️ Turno", value=f"**{turn}**", inline=True)
+            
+            embed.add_field(name=f"❤️ {opponent_user.display_name}", 
+                           value=f"{opponent_stats['name']}\n{opponent_hp_bar}\n{opponent_temp_hp}/{opponent_stats['max_hp']} HP", 
+                           inline=True)
+            
+            if battle_log:
+                embed.add_field(name="📜 Últimos ataques", 
+                               value="\n".join(battle_log[-3:]), 
+                               inline=False)
+            
+            await battle_msg.edit(embed=embed)
+        
+        turn += 1
+        await asyncio.sleep(1)  # Pausa entre turnos
+    
+    # Determinar resultado
+    if player_temp_hp <= 0 and opponent_temp_hp <= 0:
+        # Empate
+        embed = discord.Embed(
+            title="🤝 ¡EMPATE!",
+            description=f"Ambos combatientes han caído al mismo tiempo.\n\n"
+                       f"**{player_stats['name']}** y **{opponent_stats['name']}** se dan la mano como rivales dignos.",
+            color=discord.Color.greyple()
+        )
+    elif player_temp_hp <= 0:
+        # El oponente gana
+        embed = discord.Embed(
+            title="🏆 ¡VICTORIA DEL OPONENTE!",
+            description=f"**{opponent_stats['name']}** ({opponent_user.display_name}) ha ganado la batalla amistosa.\n\n"
+                       f"Con **{opponent_temp_hp}** HP restantes, demuestra su habilidad en combate.",
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=opponent_user.display_avatar.url)
+    else:
+        # El jugador gana
+        embed = discord.Embed(
+            title="🏆 ¡VICTORIA!",
+            description=f"**{player_stats['name']}** ({ctx.author.display_name}) ha ganado la batalla amistosa.\n\n"
+                       f"Con **{player_temp_hp}** HP restantes, demuestra su habilidad en combate.",
+            color=discord.Color.green()
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+    
+    # Añadir registro de batalla
+    if battle_log:
+        embed.add_field(
+            name="📜 Resumen de la Batalla",
+            value="\n".join(battle_log[-5:]),  # Mostrar últimos 5 turnos
+            inline=False
+        )
+    
+    embed.add_field(
+        name="📊 Estadísticas de la Batalla",
+        value=f"**Turnos totales:** {turn-1}\n"
+              f"**Daño total infligido:** {(player_stats['max_hp'] - player_temp_hp) + (opponent_stats['max_hp'] - opponent_temp_hp)}\n"
+              f"**Promedio de daño por turno:** {((player_stats['max_hp'] - player_temp_hp) + (opponent_stats['max_hp'] - opponent_temp_hp)) / max(1, turn-1):.1f}",
+        inline=False
+    )
+    
+    embed.set_footer(text="⚔️ Batalla amistosa - Sin consecuencias para la vida real de los personajes")
+    
+    await battle_msg.edit(embed=embed)
+
+async def game_friendly(ctx, args: str = None):
+    """Inicia una batalla amistosa con otro usuario"""
+    if not args:
+        embed = discord.Embed(
+            title="🤝 Batalla Amistosa",
+            description="**Desafía a otro usuario a una batalla amistosa!**\n\n"
+                       "**Uso:** `t!game amistosa @usuario`\n\n"
+                       "**Reglas:**\n"
+                       "• No se pierde vida real\n"
+                       "• No activa efectos especiales\n"
+                       "• No cuenta para estadísticas\n"
+                       "• Solo por diversión y práctica\n\n"
+                       "**¿Quién será el mejor?** ⚔️",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Intentar obtener el usuario mencionado
+    try:
+        opponent = await commands.MemberConverter().convert(ctx, args)
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado. Usa `@usuario`")
+        return
+    
+    # Verificar que no es el mismo usuario
+    if opponent.id == ctx.author.id:
+        await ctx.send("❌ No puedes luchar contra ti mismo. ¡Busca un oponente real!")
+        return
+    
+    # Verificar que ambos tienen personajes
+    player = db.get_player(ctx.author.id)
+    if not player:
+        await ctx.send("❌ No tienes un personaje. Usa `t!game start` para crear uno.")
+        return
+    
+    opponent_player = db.get_player(opponent.id)
+    if not opponent_player:
+        embed = discord.Embed(
+            title="❌ Oponente sin personaje",
+            description=f"{opponent.display_name} no tiene un personaje creado.\n\n"
+                       f"Pídele que use `t!game start` para crear uno y luego podrán combatir.",
+            color=discord.Color.orange()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Verificar que ninguno esté muerto (aunque sea batalla amistosa)
+    player_dead, _ = check_player_dead(player)
+    opponent_dead, _ = check_player_dead(opponent_player)
+    
+    if player_dead:
+        await ctx.send("❌ No puedes luchar mientras estás muerto. ¡Revive primero!")
+        return
+    
+    if opponent_dead:
+        embed = discord.Embed(
+            title="❌ Oponente está muerto",
+            description=f"{opponent.display_name} está muerto y no puede combatir.\n\n"
+                       f"Debe revivir primero con `t!game revive` o esperar 48 horas.",
+            color=discord.Color.dark_grey()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Pedir confirmación al oponente
+    embed = discord.Embed(
+        title="🤝 ¡DESAFÍO DE BATALLA AMISTOSA!",
+        description=f"**{ctx.author.display_name}** te desafía a una batalla amistosa.\n\n"
+                   f"**Tu personaje:** {opponent_player['character_stats']['name']}\n"
+                   f"**Contra:** {player['character_stats']['name']}\n\n"
+                   f"¿Aceptas el desafío?",
+        color=discord.Color.gold()
+    )
+    
+    embed.add_field(name="⚔️ Reglas", 
+                   value="• No se pierde vida real\n• Solo por diversión\n• Sin consecuencias", 
+                   inline=False)
+    
+    embed.set_footer(text="Tienes 30 segundos para aceptar")
+    
+    challenge_msg = await ctx.send(f"{opponent.mention}", embed=embed)
+    
+    # Agregar reacciones
+    await challenge_msg.add_reaction("✅")
+    await challenge_msg.add_reaction("❌")
+    
+    # Esperar respuesta
+    def check(reaction, user):
+        return user == opponent and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == challenge_msg.id
+    
+    try:
+        reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+        
+        if str(reaction.emoji) == "✅":
+            # Oponente aceptó
+            embed = discord.Embed(
+                title="✅ ¡DESAFÍO ACEPTADO!",
+                description=f"{opponent.display_name} ha aceptado el desafío.\n\n"
+                           f"¡Que comience la batalla amistosa! ⚔️",
+                color=discord.Color.green()
+            )
+            await challenge_msg.edit(embed=embed)
+            await challenge_msg.clear_reactions()
+            
+            # Esperar un momento para dramatismo
+            await asyncio.sleep(2)
+            
+            # Iniciar batalla
+            await start_friendly_battle(ctx, player, opponent_player, opponent)
+            
+        else:
+            # Oponente rechazó
+            embed = discord.Embed(
+                title="❌ Desafío rechazado",
+                description=f"{opponent.display_name} ha rechazado el desafío.\n\n"
+                           f"¡Tal vez en otra ocasión!",
+                color=discord.Color.red()
+            )
+            await challenge_msg.edit(embed=embed)
+            await challenge_msg.clear_reactions()
+            
+    except asyncio.TimeoutError:
+        embed = discord.Embed(
+            title="⏰ Tiempo agotado",
+            description=f"{opponent.display_name} no respondió a tiempo.\n\n"
+                       f"El desafío ha expirado.",
+            color=discord.Color.dark_grey()
+        )
+        await challenge_msg.edit(embed=embed)
+        await challenge_msg.clear_reactions()
+
+@bot.command(name='pvp', aliases=['versus', 'batalla'])
+async def pvp_info(ctx):
+    """Información sobre el sistema de batallas amistosas"""
+    embed = discord.Embed(
+        title="🤝 Sistema de Batallas Amistosas PvP",
+        description="**Desafía a otros jugadores a batallas sin consecuencias!**",
+        color=discord.Color.blue()
+    )
+    
+    embed.add_field(
+        name="⚔️ **Cómo funciona**",
+        value="1. Usa `t!game amistosa @usuario`\n"
+              "2. El oponente debe aceptar el desafío\n"
+              "3. Se simula una batalla por turnos\n"
+              "4. ¡El mejor combatiente gana!",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🎯 **Características**",
+        value="✅ **Sin pérdida de vida real**\n"
+              "✅ **Sin consumo de recursos**\n"
+              "✅ **Sin efectos especiales activados**\n"
+              "✅ **Sin afectar estadísticas**\n"
+              "✅ **Solo por diversión y práctica**",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="📊 **Qué se usa**",
+        value="• Vida máxima de los personajes\n"
+              "• Daño mínimo y máximo\n"
+              "• Nombre y apariencia\n"
+              "• **¡No se usa la vida actual!**",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🚫 **Qué NO se usa**",
+        value="• Efectos especiales de personajes\n"
+              "• Items del inventario\n"
+              "• Pociones o revivir\n"
+              "• Sistema de escalado\n"
+              "• Recompensas de monedas",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🎮 **Propósito**",
+        value="• Practicar estrategias\n"
+              "• Probar diferentes personajes\n"
+              "• Divertirse con amigos\n"
+              "• Determinar quién es el mejor\n"
+              "• Aprender mecánicas de combate",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="💡 **Consejos**",
+        value="• Usa personajes con mucho daño para victorias rápidas\n"
+              "• Personajes con mucha vida pueden aguantar más\n"
+              "• ¡Experimenta con diferentes combinaciones!\n"
+              "• Reta a amigos para mejorar juntos",
+        inline=False
+    )
+    
+    embed.set_footer(text="¡Usa t!game amistosa @usuario para comenzar!")
+    await ctx.send(embed=embed)
+
+# ========== COMANDOS DE ADMINISTRADOR ==========
+@bot.command(name='admin', aliases=['administrador', 'mod'])
+@commands.has_permissions(administrator=True)
+async def admin_command(ctx, action: str = None, *, args: str = None):
+    """Panel de administración del juego - Solo administradores"""
+    
+    if not action:
+        await show_admin_help(ctx)
+        return
+    
+    action = action.lower()
+    
+    if action == "help":
+        await show_admin_help(ctx)
+    elif action == "addchar":
+        await admin_add_character(ctx, args)
+    elif action == "removechar":
+        await admin_remove_character(ctx, args)
+    elif action == "givecoins":
+        await admin_give_coins(ctx, args)
+    elif action == "resetuser":
+        await admin_reset_user(ctx, args)
+    elif action == "resetall":
+        await admin_reset_all(ctx)
+    elif action == "resetcounters":
+        await admin_reset_counters(ctx)
+    elif action == "revive":
+        await admin_revive_user(ctx, args)
+    elif action == "sethealth":
+        await admin_set_health(ctx, args)
+    elif action == "setcoins":
+        await admin_set_coins(ctx, args)
+    elif action == "kill":
+        await admin_kill_user(ctx, args)
+    elif action == "inspect":
+        await admin_inspect_user(ctx, args)
+    elif action == "listusers":
+        await admin_list_users(ctx)
+    elif action == "stats":
+        await admin_game_stats(ctx)
+    else:
+        await ctx.send("❌ Acción no válida. Usa `t!admin help` para ver opciones.")
+
+async def show_admin_help(ctx):
+    """Muestra la ayuda de administración"""
+    embed = discord.Embed(
+        title="🔧 Panel de Administración del Juego",
+        description="**Solo administradores pueden usar estos comandos**",
+        color=discord.Color.red()
+    )
+    
+    embed.add_field(
+        name="👥 **Gestión de Usuarios**",
+        value="`addchar <@usuario> <personaje>` - Añadir personaje\n"
+              "`removechar <@usuario> <personaje>` - Quitar personaje\n"
+              "`resetuser <@usuario>` - Resetear usuario\n"
+              "`revive <@usuario>` - Revivir usuario\n"
+              "`kill <@usuario>` - Matar usuario\n"
+              "`inspect <@usuario>` - Inspeccionar usuario",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="💰 **Gestión de Recursos**",
+        value="`givecoins <@usuario> <cantidad>` - Dar monedas\n"
+              "`setcoins <@usuario> <cantidad>` - Establecer monedas\n"
+              "`sethealth <@usuario> <cantidad>` - Establecer vida",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🔄 **Sistema Global**",
+        value="`resetall` - Resetear TODOS los usuarios\n"
+              "`resetcounters` - Reiniciar contadores diarios\n"
+              "`listusers` - Listar todos los usuarios\n"
+              "`stats` - Estadísticas del juego",
+        inline=False
+    )
+    
+    embed.set_footer(text="⚠️ Estos comandos pueden afectar permanentemente el progreso de los jugadores")
+    await ctx.send(embed=embed)
+
+async def admin_add_character(ctx, args: str):
+    """Añade un personaje específico a un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin addchar <@usuario> <nombre_personaje>`")
+        return
+    
+    # Parsear argumentos: mencion y nombre del personaje
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin addchar <@usuario> <nombre_personaje>`")
+        return
+    
+    # Intentar obtener el usuario mencionado
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    character_name = " ".join(parts[1:])
+    
+    # Verificar si el personaje existe
+    if character_name not in ALL_CHARACTERS:
+        # Buscar por coincidencia parcial
+        found_characters = []
+        for char_name in ALL_CHARACTERS.keys():
+            if character_name.lower() in char_name.lower():
+                found_characters.append(char_name)
+        
+        if not found_characters:
+            await ctx.send(f"❌ Personaje '{character_name}' no encontrado")
+            return
+        
+        if len(found_characters) > 1:
+            # Mostrar opciones
+            embed = discord.Embed(
+                title="🔍 Personajes encontrados",
+                description=f"Se encontraron {len(found_characters)} personajes que coinciden:",
+                color=discord.Color.blue()
+            )
+            
+            for i, char in enumerate(found_characters[:10], 1):
+                embed.add_field(name=f"{i}. {char}", value=ALL_CHARACTERS[char].rarity.value, inline=False)
+            
+            embed.set_footer(text="Usa el nombre completo del personaje")
+            await ctx.send(embed=embed)
+            return
+        
+        character_name = found_characters[0]
+    
+    # Obtener datos del jugador
+    player = db.get_player(user.id)
+    
+    if not player:
+        # Crear jugador si no existe
+        # Usar el primer personaje inicial como predeterminado
+        starter_char = list(STARTER_CHARACTERS.keys())[0]
+        db.create_player(user.id, user.name, starter_char)
+        player = db.get_player(user.id)
+    
+    # Verificar si ya tiene el personaje
+    for char in player.get("unlocked_characters", []):
+        if char["name"] == character_name:
+            await ctx.send(f"❌ {user.display_name} ya tiene el personaje **{character_name}**")
+            return
+    
+    # Desbloquear personaje
+    result = db.unlock_character(user.id, character_name)
+    
+    if result:
+        character = ALL_CHARACTERS[character_name]
+        
+        embed = discord.Embed(
+            title="✅ Personaje añadido",
+            description=f"**{character_name}** añadido a {user.mention}",
+            color=discord.Color.green()
+        )
+        
+        embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+        embed.add_field(name="🎭 Personaje", value=character_name, inline=True)
+        embed.add_field(name="⭐ Rareza", value=character.rarity.value, inline=True)
+        
+        if character.special_effect:
+            embed.add_field(name="✨ Efecto", value=character.special_effect, inline=False)
+        
+        embed.add_field(name="❤️ Vida", value=f"{character.max_hp} HP", inline=True)
+        embed.add_field(name="⚔️ Daño", value=f"{character.min_damage}-{character.max_damage}", inline=True)
+        
+        embed.set_footer(text=f"Añadido por {ctx.author.display_name}")
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("❌ Error al añadir el personaje")
+
+async def admin_remove_character(ctx, args: str):
+    """Quita un personaje específico de un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin removechar <@usuario> <nombre_personaje>`")
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin removechar <@usuario> <nombre_personaje>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    character_name = " ".join(parts[1:])
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    # Buscar el personaje
+    character_found = False
+    character_index = -1
+    
+    for i, char in enumerate(player.get("unlocked_characters", [])):
+        if char["name"].lower() == character_name.lower():
+            character_found = True
+            character_index = i
+            break
+    
+    if not character_found:
+        # Buscar por coincidencia parcial
+        for i, char in enumerate(player.get("unlocked_characters", [])):
+            if character_name.lower() in char["name"].lower():
+                character_found = True
+                character_index = i
+                character_name = char["name"]
+                break
+    
+    if not character_found:
+        await ctx.send(f"❌ {user.display_name} no tiene el personaje **{character_name}**")
+        return
+    
+    # Verificar si es el personaje actual
+    if player["current_character"] == character_name:
+        await ctx.send(f"❌ No puedes quitar el personaje actual de {user.display_name}. Cambia primero con `t!game switch`")
+        return
+    
+    # Quitar personaje
+    updated_chars = player["unlocked_characters"].copy()
+    removed_char = updated_chars.pop(character_index)
+    
+    db.update_player(user.id, {
+        "unlocked_characters": updated_chars,
+        "characters_unlocked": max(0, player.get("characters_unlocked", 1) - 1)
+    })
+    
+    embed = discord.Embed(
+        title="❌ Personaje removido",
+        description=f"**{character_name}** removido de {user.mention}",
+        color=discord.Color.orange()
+    )
+    
+    embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+    embed.add_field(name="🎭 Personaje", value=character_name, inline=True)
+    embed.add_field(name="⭐ Rareza", value=removed_char.get("rarity", "Desconocida"), inline=True)
+    
+    embed.set_footer(text=f"Removido por {ctx.author.display_name}")
+    await ctx.send(embed=embed)
+
+async def admin_give_coins(ctx, args: str):
+    """Da monedas a un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin givecoins <@usuario> <cantidad>`")
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin givecoins <@usuario> <cantidad>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    try:
+        amount = int(parts[1])
+        if amount <= 0:
+            await ctx.send("❌ La cantidad debe ser mayor a 0")
+            return
+    except ValueError:
+        await ctx.send("❌ La cantidad debe ser un número válido")
+        return
+    
+    # Verificar límite razonable
+    if amount > 1000000:
+        await ctx.send("❌ Cantidad demasiado alta. Máximo 1,000,000 monedas")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        # Crear jugador si no existe
+        starter_char = list(STARTER_CHARACTERS.keys())[0]
+        db.create_player(user.id, user.name, starter_char)
+        player = db.get_player(user.id)
+    
+    result = db.add_coins(user.id, amount)
+    
+    if result:
+        embed = discord.Embed(
+            title="💰 Monedas añadidas",
+            description=f"Se añadieron **{amount} monedas** a {user.mention}",
+            color=discord.Color.gold()
+        )
+        
+        embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+        embed.add_field(name="💸 Cantidad", value=f"+{amount} monedas", inline=True)
+        embed.add_field(name="💰 Total", value=f"{result['coins']} monedas", inline=True)
+        
+        embed.set_footer(text=f"Añadido por {ctx.author.display_name}")
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("❌ Error al añadir monedas")
+
+async def admin_reset_user(ctx, args: str):
+    """Resetea completamente un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin resetuser <@usuario>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, args)
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    # Pedir confirmación
+    embed = discord.Embed(
+        title="⚠️ ¿Resetear usuario?",
+        description=f"Estás a punto de resetear completamente a **{user.display_name}**.\n\n"
+                   f"**Esto eliminará:**\n• Todos los personajes desbloqueados\n• Todas las monedas\n• Todas las estadísticas\n\n"
+                   f"⚠️ **¡Esta acción NO se puede deshacer!**",
+        color=discord.Color.red()
+    )
+    
+    embed.add_field(name="👤 Usuario", value=user.mention, inline=True)
+    embed.add_field(name="🎭 Personaje actual", value=player["current_character"], inline=True)
+    embed.add_field(name="💰 Monedas", value=f"{player['coins']}", inline=True)
+    embed.add_field(name="👥 Personajes", value=f"{player.get('characters_unlocked', 1)}", inline=True)
+    embed.add_field(name="👹 Monstruos", value=f"{player.get('monsters_defeated', 0)}", inline=True)
+    
+    confirm_msg = await ctx.send(embed=embed)
+    
+    # Agregar reacciones para confirmar
+    await confirm_msg.add_reaction("✅")
+    await confirm_msg.add_reaction("❌")
+    
+    # Esperar confirmación
+    def check(reaction, reactor):
+        return reactor == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+    
+    try:
+        reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+        
+        if str(reaction.emoji) == "✅":
+            # Eliminar jugador de la base de datos
+            db.players.delete_one({"discord_id": str(user.id)})
+            
+            # Crear nuevo jugador con personaje inicial predeterminado
+            starter_char = list(STARTER_CHARACTERS.keys())[0]
+            db.create_player(user.id, user.name, starter_char)
+            
+            embed = discord.Embed(
+                title="✅ Usuario reseteado",
+                description=f"**{user.display_name}** ha sido reseteado completamente.\nAhora tiene el personaje inicial **{starter_char}**.",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(name="👤 Usuario", value=user.mention, inline=True)
+            embed.add_field(name="🎭 Nuevo personaje", value=starter_char, inline=True)
+            
+            await confirm_msg.edit(embed=embed)
+            await confirm_msg.clear_reactions()
+            
+        else:
+            await confirm_msg.edit(content="❌ Reset cancelado", embed=None)
+            await confirm_msg.clear_reactions()
+            
+    except asyncio.TimeoutError:
+        await confirm_msg.edit(content="⏰ Tiempo de confirmación agotado", embed=None)
+        await confirm_msg.clear_reactions()
+
+async def admin_reset_all(ctx):
+    """Resetea TODOS los usuarios (¡PELIGROSO!)"""
+    # Pedir confirmación EXTREMA
+    embed = discord.Embed(
+        title="☠️ ¡¡¡RESETEO TOTAL!!!",
+        description="**ESTÁS A PUNTO DE RESETEAR A TODOS LOS USUARIOS**\n\n"
+                   f"Esto afectará a **{db.players.count_documents({})} jugadores**.\n\n"
+                   "**Se perderá permanentemente:**\n"
+                   "• Todos los personajes desbloqueados\n"
+                   "• Todas las monedas\n"
+                   "• Todas las estadísticas\n"
+                   "• Todo el progreso\n\n"
+                   "⚠️ **¡¡¡ESTA ACCIÓN NO SE PUEDE DESHACER!!!**",
+        color=discord.Color.dark_red()
+    )
+    
+    embed.set_footer(text="Escribe 'RESET TOTAL' para confirmar (tienes 30 segundos)")
+    await ctx.send(embed=embed)
+    
+    # Esperar confirmación específica
+    def check(message):
+        return message.author == ctx.author and message.content == "RESET TOTAL"
+    
+    try:
+        await bot.wait_for('message', timeout=30.0, check=check)
+        
+        # Obtener conteo antes del reset
+        total_players = db.players.count_documents({})
+        
+        # Eliminar TODOS los jugadores
+        result = db.players.delete_many({})
+        
+        embed = discord.Embed(
+            title="☠️ ¡RESETEO COMPLETADO!",
+            description=f"Se han eliminado **{result.deleted_count} jugadores** de la base de datos.\n\n"
+                       "Todos los usuarios deberán usar `t!game start` nuevamente.",
+            color=discord.Color.dark_purple()
+        )
+        
+        embed.add_field(name="👥 Jugadores afectados", value=f"{result.deleted_count}", inline=True)
+        
+        await ctx.send(embed=embed)
+        
+    except asyncio.TimeoutError:
+        await ctx.send("⏰ Tiempo de confirmación agotado. Reset cancelado.")
+
+async def admin_reset_counters(ctx):
+    """Reinicia los contadores diarios para todos los usuarios"""
+    # Pedir confirmación
+    total_players = db.players.count_documents({})
+    
+    embed = discord.Embed(
+        title="🔄 ¿Reiniciar contadores diarios?",
+        description=f"Esto reiniciará los contadores diarios para **{total_players} jugadores**.\n\n"
+                   "**Se reseteará:**\n• Usos de daily (5/5)\n• Uso de sdaily (disponible)\n\n"
+                   "¿Continuar?",
+        color=discord.Color.orange()
+    )
+    
+    confirm_msg = await ctx.send(embed=embed)
+    await confirm_msg.add_reaction("✅")
+    await confirm_msg.add_reaction("❌")
+    
+    def check(reaction, reactor):
+        return reactor == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+    
+    try:
+        reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+        
+        if str(reaction.emoji) == "✅":
+            db.reset_daily_uses()
+            
+            embed = discord.Embed(
+                title="✅ Contadores reiniciados",
+                description=f"Se han reiniciado los contadores diarios para **{total_players} jugadores**.",
+                color=discord.Color.green()
+            )
+            
+            await confirm_msg.edit(embed=embed)
+            await confirm_msg.clear_reactions()
+            
+        else:
+            await confirm_msg.edit(content="❌ Operación cancelada", embed=None)
+            await confirm_msg.clear_reactions()
+            
+    except asyncio.TimeoutError:
+        await confirm_msg.edit(content="⏰ Tiempo agotado", embed=None)
+        await confirm_msg.clear_reactions()
+
+async def admin_revive_user(ctx, args: str):
+    """Revive a un usuario manualmente"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin revive <@usuario>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, args)
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    if not player["is_dead"]:
+        await ctx.send(f"❌ {user.display_name} no está muerto")
+        return
+    
+    # Revivir usuario
+    result = db.revive_player(user.id)
+    
+    if result:
+        embed = discord.Embed(
+            title="✨ Usuario revivido",
+            description=f"{user.mention} ha sido revivido manualmente.",
+            color=discord.Color.green()
+        )
+        
+        embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+        embed.add_field(name="❤️ Vida", value=f"{result['character_stats']['current_hp']}/{result['character_stats']['max_hp']}", inline=True)
+        embed.add_field(name="🎭 Personaje", value=result["current_character"], inline=True)
+        
+        embed.set_footer(text=f"Revivido por {ctx.author.display_name}")
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("❌ Error al revivir al usuario")
+
+async def admin_set_health(ctx, args: str):
+    """Establece la vida de un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin sethealth <@usuario> <cantidad>`")
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin sethealth <@usuario> <cantidad>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    try:
+        health = int(parts[1])
+        if health < 0:
+            await ctx.send("❌ La vida no puede ser negativa")
+            return
+    except ValueError:
+        await ctx.send("❌ La cantidad debe ser un número válido")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    max_hp = player["character_stats"]["max_hp"]
+    new_health = min(health, max_hp)  # No exceder la vida máxima
+    
+    # Actualizar vida
+    db.update_player(user.id, {
+        "character_stats.current_hp": new_health
+    })
+    
+    # También actualizar en unlocked_characters
+    updated_chars = []
+    for char in player.get("unlocked_characters", []):
+        char_copy = char.copy()
+        if char["name"] == player["current_character"]:
+            char_copy["current_hp"] = new_health
+        updated_chars.append(char_copy)
+    
+    db.update_player(user.id, {"unlocked_characters": updated_chars})
+    
+    embed = discord.Embed(
+        title="❤️ Vida establecida",
+        description=f"Vida de {user.mention} establecida a **{new_health}**",
+        color=discord.Color.green()
+    )
+    
+    embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+    embed.add_field(name="❤️ Vida anterior", value=f"{player['character_stats']['current_hp']}/{max_hp}", inline=True)
+    embed.add_field(name="❤️ Vida nueva", value=f"{new_health}/{max_hp}", inline=True)
+    
+    if new_health == 0:
+        embed.add_field(name="💀 Estado", value="El usuario ahora está muerto", inline=False)
+    
+    await ctx.send(embed=embed)
+
+async def admin_set_coins(ctx, args: str):
+    """Establece las monedas de un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin setcoins <@usuario> <cantidad>`")
+        return
+    
+    parts = args.split()
+    if len(parts) < 2:
+        await ctx.send("❌ Uso: `t!admin setcoins <@usuario> <cantidad>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, parts[0])
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    try:
+        coins = int(parts[1])
+        if coins < 0:
+            await ctx.send("❌ Las monedas no pueden ser negativas")
+            return
+    except ValueError:
+        await ctx.send("❌ La cantidad debe ser un número válido")
+        return
+    
+    # Verificar límite razonable
+    if coins > 10000000:
+        await ctx.send("❌ Cantidad demasiado alta. Máximo 10,000,000 monedas")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        # Crear jugador si no existe
+        starter_char = list(STARTER_CHARACTERS.keys())[0]
+        db.create_player(user.id, user.name, starter_char)
+        player = db.get_player(user.id)
+    
+    # Establecer monedas
+    db.update_player(user.id, {"coins": coins})
+    
+    embed = discord.Embed(
+        title="💰 Monedas establecidas",
+        description=f"Monedas de {user.mention} establecidas a **{coins}**",
+        color=discord.Color.gold()
+    )
+    
+    embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+    embed.add_field(name="💰 Monedas anteriores", value=f"{player['coins']}", inline=True)
+    embed.add_field(name="💰 Monedas nuevas", value=f"{coins}", inline=True)
+    
+    await ctx.send(embed=embed)
+
+async def admin_kill_user(ctx, args: str):
+    """Mata a un usuario manualmente"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin kill <@usuario>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, args)
+    except:
+        await ctx.send("❌ No se pudo encontrar el usuario mencionado")
+        return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    if player["is_dead"]:
+        await ctx.send(f"❌ {user.display_name} ya está muerto")
+        return
+    
+    # Pedir confirmación
+    embed = discord.Embed(
+        title="💀 ¿Matar usuario?",
+        description=f"Estás a punto de matar a **{user.display_name}**.\n\n"
+                   f"**Esto:**\n• Establecerá su vida a 0\n• Lo marcará como muerto\n• Deberá esperar 48 horas para revivir\n\n"
+                   f"¿Continuar?",
+        color=discord.Color.dark_red()
+    )
+    
+    confirm_msg = await ctx.send(embed=embed)
+    await confirm_msg.add_reaction("✅")
+    await confirm_msg.add_reaction("❌")
+    
+    def check(reaction, reactor):
+        return reactor == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+    
+    try:
+        reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+        
+        if str(reaction.emoji) == "✅":
+            # Matar usuario
+            result = db.kill_player(user.id)
+            
+            embed = discord.Embed(
+                title="💀 Usuario eliminado",
+                description=f"{user.mention} ha sido eliminado.\n\n"
+                           f"**Tiempo para revivir:** 48 horas",
+                color=discord.Color.dark_grey()
+            )
+            
+            embed.add_field(name="👤 Usuario", value=user.display_name, inline=True)
+            embed.add_field(name="⏰ Hora de muerte", value=datetime.utcnow().strftime("%H:%M:%S"), inline=True)
+            embed.add_field(name="📅 Revivir el", value=(datetime.utcnow() + timedelta(days=2)).strftime("%d/%m/%Y %H:%M"), inline=False)
+            
+            await confirm_msg.edit(embed=embed)
+            await confirm_msg.clear_reactions()
+            
+        else:
+            await confirm_msg.edit(content="❌ Operación cancelada", embed=None)
+            await confirm_msg.clear_reactions()
+            
+    except asyncio.TimeoutError:
+        await confirm_msg.edit(content="⏰ Tiempo agotado", embed=None)
+        await confirm_msg.clear_reactions()
+
+async def admin_inspect_user(ctx, args: str):
+    """Inspecciona los datos completos de un usuario"""
+    if not args:
+        await ctx.send("❌ Uso: `t!admin inspect <@usuario>`")
+        return
+    
+    try:
+        user = await commands.MemberConverter().convert(ctx, args)
+    except:
+        # Intentar por ID
+        try:
+            user_id = int(args)
+            user = await bot.fetch_user(user_id)
+        except:
+            await ctx.send("❌ No se pudo encontrar el usuario")
+            return
+    
+    player = db.get_player(user.id)
+    
+    if not player:
+        await ctx.send(f"❌ {user.display_name} no tiene un personaje creado")
+        return
+    
+    # Crear embed detallado
+    embed = discord.Embed(
+        title=f"🔍 Inspección de {user.display_name}",
+        color=discord.Color.blue()
+    )
+    
+    # Información básica
+    embed.add_field(name="👤 Usuario", value=f"{user.mention}\nID: {user.id}", inline=False)
+    embed.add_field(name="💀 Estado", value="MUERTO" if player["is_dead"] else "VIVO", inline=True)
+    embed.add_field(name="🎭 Personaje actual", value=player["current_character"], inline=True)
+    
+    # Estadísticas
+    char_stats = player["character_stats"]
+    embed.add_field(name="❤️ Vida", value=f"{char_stats['current_hp']}/{char_stats['max_hp']}", inline=True)
+    embed.add_field(name="⚔️ Daño", value=f"{char_stats['min_damage']}-{char_stats['max_damage']}", inline=True)
+    embed.add_field(name="💰 Monedas", value=f"{player['coins']}", inline=True)
+    
+    # Progreso
+    embed.add_field(name="👹 Monstruos derrotados", value=f"{player.get('monsters_defeated', 0)}", inline=True)
+    embed.add_field(name="💥 Daño total", value=f"{player.get('total_damage_dealt', 0)}", inline=True)
+    embed.add_field(name="👥 Personajes desbloqueados", value=f"{player.get('characters_unlocked', 1)}", inline=True)
+    
+    # Contadores diarios
+    embed.add_field(name="📅 Daily usados", value=f"{player['daily_uses_today']}/5", inline=True)
+    embed.add_field(name="🌟 Sdaily usado", value="✅" if player["sdaily_used_today"] else "❌", inline=True)
+    
+    # Fechas importantes
+    created = player["created_at"].strftime("%d/%m/%Y %H:%M") if isinstance(player["created_at"], datetime) else str(player["created_at"])
+    embed.add_field(name="📅 Creado el", value=created, inline=True)
+    
+    last_active = player["last_active"].strftime("%d/%m/%Y %H:%M") if isinstance(player["last_active"], datetime) else str(player["last_active"])
+    embed.add_field(name="🕒 Última actividad", value=last_active, inline=True)
+    
+    if player["is_dead"] and player.get("death_time"):
+        death_time = player["death_time"].strftime("%d/%m/%Y %H:%M") if isinstance(player["death_time"], datetime) else str(player["death_time"])
+        embed.add_field(name="💀 Hora de muerte", value=death_time, inline=True)
+    
+    # Lista de personajes
+    unlocked_chars = player.get("unlocked_characters", [])
+    if unlocked_chars:
+        chars_by_rarity = {}
+        for char in unlocked_chars:
+            rarity = char.get("rarity", "Desconocida")
+            if rarity not in chars_by_rarity:
+                chars_by_rarity[rarity] = []
+            chars_by_rarity[rarity].append(char["name"])
+        
+        chars_text = []
+        for rarity, chars in chars_by_rarity.items():
+            chars_text.append(f"**{rarity}:** {', '.join(chars[:3])}" + ("..." if len(chars) > 3 else ""))
+        
+        embed.add_field(
+            name="🎭 Personajes desbloqueados",
+            value="\n".join(chars_text) if chars_text else "Ninguno",
+            inline=False
+        )
+    
+    await ctx.send(embed=embed)
+
+async def admin_list_users(ctx):
+    """Lista todos los usuarios del juego"""
+    try:
+        players = list(db.players.find().sort("created_at", -1).limit(50))
+        
+        if not players:
+            await ctx.send("❌ No hay usuarios registrados en el juego")
+            return
+        
+        total_players = db.players.count_documents({})
+        alive_players = db.players.count_documents({"is_dead": False})
+        dead_players = db.players.count_documents({"is_dead": True})
+        
+        embed = discord.Embed(
+            title="📋 Lista de Usuarios",
+            description=f"Mostrando {len(players)} de {total_players} usuarios",
+            color=discord.Color.blue()
+        )
+        
+        # Estadísticas
+        embed.add_field(name="👥 Total", value=str(total_players), inline=True)
+        embed.add_field(name="❤️ Vivos", value=str(alive_players), inline=True)
+        embed.add_field(name="💀 Muertos", value=str(dead_players), inline=True)
+        
+        # Lista de usuarios
+        users_text = []
+        for i, player in enumerate(players[:25], 1):  # Mostrar primeros 25
+            status = "💀" if player["is_dead"] else "❤️"
+            users_text.append(f"{i}. {status} **{player['username']}** - {player['coins']}💰 - {player.get('characters_unlocked', 1)}👥")
+        
+        if users_text:
+            embed.add_field(
+                name="👤 Usuarios",
+                value="\n".join(users_text),
+                inline=False
+            )
+        
+        # Si hay más de 25, mostrar en otra página
+        if len(players) > 25:
+            users_text2 = []
+            for i, player in enumerate(players[25:50], 26):
+                status = "💀" if player["is_dead"] else "❤️"
+                users_text2.append(f"{i}. {status} **{player['username']}** - {player['coins']}💰")
+            
+            if users_text2:
+                embed.add_field(
+                    name="👤 Usuarios (cont.)",
+                    value="\n".join(users_text2),
+                    inline=False
+                )
+        
+        embed.set_footer(text=f"Total: {total_players} usuarios | Usa t!admin inspect <@usuario> para más detalles")
+        await ctx.send(embed=embed)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error al obtener la lista de usuarios: {str(e)}")
+
+async def admin_game_stats(ctx):
+    """Muestra estadísticas detalladas del juego"""
+    try:
+        # Estadísticas generales
+        total_players = db.players.count_documents({})
+        alive_players = db.players.count_documents({"is_dead": False})
+        dead_players = db.players.count_documents({"is_dead": True})
+        
+        # Monedas totales
+        pipeline_coins = [{"$group": {"_id": None, "total": {"$sum": "$coins"}}}]
+        coins_result = list(db.players.aggregate(pipeline_coins))
+        total_coins = coins_result[0]["total"] if coins_result else 0
+        
+        # Monstruos totales derrotados
+        pipeline_monsters = [{"$group": {"_id": None, "total": {"$sum": "$monsters_defeated"}}}]
+        monsters_result = list(db.players.aggregate(pipeline_monsters))
+        total_monsters = monsters_result[0]["total"] if monsters_result else 0
+        
+        # Personajes totales desbloqueados
+        pipeline_chars = [{"$group": {"_id": None, "total": {"$sum": "$characters_unlocked"}}}]
+        chars_result = list(db.players.aggregate(pipeline_chars))
+        total_chars = chars_result[0]["total"] if chars_result else 0
+        
+        # Batallas totales
+        total_battles = db.battles.count_documents({})
+        
+        # Top jugadores
+        top_coins_players = list(db.players.find().sort("coins", -1).limit(5))
+        top_monsters_players = list(db.players.find().sort("monsters_defeated", -1).limit(5))
+        
+        embed = discord.Embed(
+            title="📊 Estadísticas del Juego",
+            color=discord.Color.purple()
+        )
+        
+        # Estadísticas generales
+        embed.add_field(
+            name="📈 General",
+            value=f"**👥 Jugadores:** {total_players}\n"
+                  f"**❤️ Vivos:** {alive_players}\n"
+                  f"**💀 Muertos:** {dead_players}\n"
+                  f"**💰 Monedas totales:** {total_coins}\n"
+                  f"**👹 Monstruos derrotados:** {total_monsters}\n"
+                  f"**🎭 Personajes desbloqueados:** {total_chars}\n"
+                  f"**⚔️ Batallas registradas:** {total_battles}",
+            inline=False
+        )
+        
+        # Top por monedas
+        if top_coins_players:
+            coins_text = []
+            for i, player in enumerate(top_coins_players, 1):
+                coins_text.append(f"{i}. **{player['username']}** - {player['coins']}💰")
+            
+            embed.add_field(
+                name="💰 Top Monedas",
+                value="\n".join(coins_text),
+                inline=True
+            )
+        
+        # Top por monstruos
+        if top_monsters_players:
+            monsters_text = []
+            for i, player in enumerate(top_monsters_players, 1):
+                monsters_text.append(f"{i}. **{player['username']}** - {player.get('monsters_defeated', 0)}👹")
+            
+            embed.add_field(
+                name="👹 Top Cazadores",
+                value="\n".join(monsters_text),
+                inline=True
+            )
+        
+        # Distribución de personajes por rareza
+        embed.add_field(
+            name="🎭 Personajes Disponibles",
+            value=f"**S:** {len(S_CHARACTERS)} | **A:** {len(A_CHARACTERS)}\n"
+                  f"**B:** {len(B_CHARACTERS)} | **C:** {len(C_CHARACTERS)}\n"
+                  f"**Iniciales:** {len(STARTER_CHARACTERS)}\n"
+                  f"**Total:** {len(ALL_CHARACTERS)}",
+            inline=True
+        )
+        
+        # Base de datos
+        embed.add_field(
+            name="🗄️ Base de Datos",
+            value=f"**Colecciones:** 5\n"
+                  f"**Estado:** {'✅ Activa' if db.db is not None else '❌ Inactiva'}\n"
+                  f"**Jugadores por página:** 50",
+            inline=True
+        )
+        
+        await ctx.send(embed=embed)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error al obtener estadísticas: {str(e)}")
+
+# ========== COMANDOS DE EMERGENCIA ==========
+@bot.command(name='emergency', aliases=['emergencia'])
+@commands.has_permissions(administrator=True)
+async def emergency_command(ctx, action: str = None):
+    """Comandos de emergencia - Solo administradores"""
+    
+    if not action:
+        embed = discord.Embed(
+            title="🆘 Comandos de Emergencia",
+            description="Comandos para situaciones críticas",
+            color=discord.Color.red()
+        )
+        
+        embed.add_field(
+            name="⚠️ **Comandos Peligrosos**",
+            value="`t!emergency resetall` - Borra TODOS los datos\n"
+                  "`t!emergency cleardead` - Elimina jugadores muertos\n"
+                  "`t!emergency fixdb` - Repara la base de datos\n"
+                  "`t!emergency backup` - Crea copia de seguridad",
+            inline=False
+        )
+        
+        embed.set_footer(text="⚠️ Usar con EXTREMA precaución")
+        await ctx.send(embed=embed)
+        return
+    
+    action = action.lower()
+    
+    if action == "resetall":
+        # Confirmación EXTREMA
+        embed = discord.Embed(
+            title="☢️ ¡¡¡EMERGENCIA RESET TOTAL!!!",
+            description="**¿ESTÁS ABSOLUTAMENTE SEGURO?**\n\n"
+                       "Esto eliminará **TODO** permanentemente:\n"
+                       "• Todos los jugadores\n• Todas las estadísticas\n• Todo el progreso\n\n"
+                       "⚠️ **¡¡¡ESTO NO SE PUEDE DESHACER!!!**\n\n"
+                       "Escribe 'CONFIRMAR RESET TOTAL' para continuar",
+            color=discord.Color.dark_red()
+        )
+        
+        await ctx.send(embed=embed)
+        
+        def check(message):
+            return message.author == ctx.author and message.content == "CONFIRMAR RESET TOTAL"
+        
+        try:
+            await bot.wait_for('message', timeout=30.0, check=check)
+            
+            # Eliminar todo
+            db.players.delete_many({})
+            db.battles.delete_many({})
+            
+            embed = discord.Embed(
+                title="✅ Reset Total Completado",
+                description="**Todos los datos han sido eliminados.**\n\n"
+                           "El juego ha sido reseteado completamente.",
+                color=discord.Color.green()
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except asyncio.TimeoutError:
+            await ctx.send("⏰ Tiempo agotado. Operación cancelada.")
+    
+    elif action == "cleardead":
+        # Eliminar jugadores muertos permanentemente
+        dead_players = list(db.players.find({"is_dead": True}))
+        
+        if not dead_players:
+            await ctx.send("❌ No hay jugadores muertos para eliminar")
+            return
+        
+        embed = discord.Embed(
+            title="💀 ¿Eliminar jugadores muertos?",
+            description=f"Esto eliminará permanentemente a **{len(dead_players)} jugadores muertos**.\n\n"
+                       f"¿Continuar?",
+            color=discord.Color.dark_grey()
+        )
+        
+        confirm_msg = await ctx.send(embed=embed)
+        await confirm_msg.add_reaction("✅")
+        await confirm_msg.add_reaction("❌")
+        
+        def check(reaction, reactor):
+            return reactor == ctx.author and str(reaction.emoji) in ["✅", "❌"] and reaction.message.id == confirm_msg.id
+        
+        try:
+            reaction, _ = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+            
+            if str(reaction.emoji) == "✅":
+                result = db.players.delete_many({"is_dead": True})
+                
+                embed = discord.Embed(
+                    title="✅ Jugadores eliminados",
+                    description=f"Se han eliminado **{result.deleted_count} jugadores muertos**.",
+                    color=discord.Color.green()
+                )
+                
+                await confirm_msg.edit(embed=embed)
+                await confirm_msg.clear_reactions()
+                
+            else:
+                await confirm_msg.edit(content="❌ Operación cancelada", embed=None)
+                await confirm_msg.clear_reactions()
+                
+        except asyncio.TimeoutError:
+            await confirm_msg.edit(content="⏰ Tiempo agotado", embed=None)
+            await confirm_msg.clear_reactions()
+    
+    elif action == "fixdb":
+        # Reparar posibles problemas en la base de datos
+        try:
+            # Verificar conexión
+            db.client.admin.command('ping')
+            
+            # Contar documentos
+            players_count = db.players.count_documents({})
+            battles_count = db.battles.count_documents({})
+            
+            # Buscar problemas comunes
+            players_without_username = list(db.players.find({"username": {"$exists": False}}))
+            
+            embed = discord.Embed(
+                title="🔧 Reparación de Base de Datos",
+                description="Se ha realizado una verificación de la base de datos.",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(name="✅ Conexión", value="Estable", inline=True)
+            embed.add_field(name="👥 Jugadores", value=str(players_count), inline=True)
+            embed.add_field(name="⚔️ Batallas", value=str(battles_count), inline=True)
+            
+            if players_without_username:
+                embed.add_field(
+                    name="⚠️ Problemas encontrados",
+                    value=f"{len(players_without_username)} jugadores sin nombre de usuario",
+                    inline=False
+                )
+                
+                # Intentar reparar
+                for player in players_without_username:
+                    try:
+                        user = await bot.fetch_user(int(player["discord_id"]))
+                        db.players.update_one(
+                            {"_id": player["_id"]},
+                            {"$set": {"username": user.name}}
+                        )
+                    except:
+                        continue
+                
+                embed.add_field(name="🔧 Reparación", value="Intentando reparar...", inline=False)
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error al reparar base de datos: {str(e)}")
+    
+    elif action == "backup":
+        # Crear copia de seguridad
+        try:
+            players = list(db.players.find({}, {"_id": 0}))
+            battles = list(db.battles.find({}, {"_id": 0}))
+            
+            embed = discord.Embed(
+                title="💾 Copia de Seguridad",
+                description="Resumen de la copia de seguridad:",
+                color=discord.Color.blue()
+            )
+            
+            embed.add_field(name="👥 Jugadores", value=str(len(players)), inline=True)
+            embed.add_field(name="⚔️ Batallas", value=str(len(battles)), inline=True)
+            embed.add_field(name="🗓️ Fecha", value=datetime.now().strftime("%d/%m/%Y %H:%M"), inline=True)
+            
+            embed.add_field(
+                name="⚠️ Importante",
+                value="Esta es solo una vista previa. Para un backup completo, exporta directamente desde MongoDB Atlas.",
+                inline=False
+            )
+            
+            await ctx.send(embed=embed)
+            
+        except Exception as e:
+            await ctx.send(f"❌ Error al crear backup: {str(e)}")
+
+# ========== COMANDO HELP SIMPLIFICADO ==========
+@bot.command(name='help', aliases=['ayuda', 'comandos'])
+async def help_command(ctx, comando: str = None):
+    """Muestra todos los comandos disponibles"""
+    
+    if comando:
+        # Ayuda específica para un comando
+        cmd = bot.get_command(comando)
+        if not cmd:
+            await ctx.send(f"❌ Comando `{comando}` no encontrado")
+            return
+        
+        embed = discord.Embed(
+            title=f"📖 Ayuda: {cmd.name}",
+            color=discord.Color.green()
+        )
+        
+        if cmd.help:
+            embed.description = cmd.help
+        else:
+            embed.description = "Sin descripción disponible"
+        
+        if cmd.aliases:
+            embed.add_field(name="Alias", value=", ".join(cmd.aliases), inline=True)
+        
+        await ctx.send(embed=embed)
+    else:
+        # Mostrar todos los comandos
+        embed = discord.Embed(
+            title="📚 Lista de Comandos - Prefijo: t!",
+            description="Usa `t!help <comando>` para más detalles",
+            color=discord.Color.blue()
+        )
+        
+        embed.add_field(
+            name="🎮 **Sistema de Juego**",
+            value="`t!game` - Sistema principal del juego\n"
+                  "`t!game start` - Comenzar aventura\n"
+                  "`t!game daily` - Recompensa diaria\n"
+                  "`t!game profile` - Ver tu perfil\n"
+                  "`t!game characters` - Tus personajes\n"
+                  "`t!game fight` - Pelear contra monstruos\n"
+                  "`t!game leaderboard` - Tabla de clasificación",
+            inline=False
+        )
+        
+        await ctx.send(embed=embed)
 
 # ========== WEBSERVER PARA RENDER ==========
 from flask import Flask
@@ -2472,9 +4081,6 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
-
-
-
 
 
 
