@@ -284,7 +284,7 @@ class GameDatabase:
             "death_time": None,
             "last_full_recovery": datetime.utcnow(),
             "created_at": datetime.utcnow(),
-            "last_active": datetime.utcnow()
+            "last_active": datetime.utcnow(),
             "inventory": {
             "potions": 0,
             "revives": 0
@@ -4274,6 +4274,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
