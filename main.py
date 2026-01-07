@@ -89,10 +89,7 @@ class Monster:
 # ========== CONFIGURACIÓN DEL JUEGO ==========
 # PERSONAJES INICIALES (Starter)
 STARTER_CHARACTERS = {
-    "Guy": Character("Guy", Rarity.STARTER, 30, 5, 10),
-    "Mage": Character("Mage", Rarity.STARTER, 25, 8, 12),
-    "Archer": Character("Archer", Rarity.STARTER, 28, 6, 9),
-    "Rogue": Character("Rogue", Rarity.STARTER, 26, 7, 11)
+    "Guy": Character("Guy", Rarity.STARTER, 30, 5, 10)
 }
 
 # PERSONAJES RAROS S
@@ -139,7 +136,6 @@ C_CHARACTERS = {
     "Kumo": Character("Kumo", Rarity.C, 30, 8, 8),
     "Celia": Character("Celia", Rarity.C, 30, 15, 15),
     "Lillie": Character("Lillie", Rarity.C, 25, 25, 25),
-    "Guy": Character("Guy", Rarity.C, 30, 5, 10),
     "Penny": Character("Penny", Rarity.C, 30, 15, 30),
     "Kris": Character("Kris", Rarity.C, 30, 20, 20),
     "Bea": Character("Bea", Rarity.C, 30, 10, 10),
@@ -160,15 +156,15 @@ CHARACTER_PROBABILITIES = {
 
 # Probabilidades de aparición de monstruos (basado en tus números)
 MONSTER_PROBABILITIES = {
-    "Guión": 0.001,      # 0.1%
-    "Muteador": 0.999,   # 99.9%
-    "Pokémon salvaje": 4.0,      # 400%
-    "Tipo del lag": 10.0,        # 1000%
-    "Tipo veloz": 10.0,          # 1000%
-    "Puerta de Sandy": 15.0,     # 1500%
-    "Tipo con sueño": 20.0,      # 2000%
-    "User muerto": 20.0,         # 2000%
-    "Tipo temeroso": 20.0        # 2000%
+    "Guión": 1.001,    
+    "Muteador": 1.999,   
+    "Pokémon salvaje": 3.0,      
+    "Tipo del lag": 10.0,        
+    "Tipo veloz": 10.0,          
+    "Puerta de Sandy": 15.0,     
+    "Tipo con sueño": 20.0,      
+    "User muerto": 20.0,         
+    "Tipo temeroso": 20.0        
 }
 
 # Normalizar probabilidades para que sumen 100%
@@ -3538,6 +3534,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
