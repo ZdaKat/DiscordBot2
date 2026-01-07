@@ -321,7 +321,7 @@ class GameDatabase:
         return_document=ReturnDocument.AFTER
     )
 
-def use_item(self, discord_id: int, item: str, amount: int = 1) -> Optional[Dict]:
+    def use_item(self, discord_id: int, item: str, amount: int = 1) -> Optional[Dict]:
     """Usa un item del inventario del jugador"""
     player = self.get_player(discord_id)
     if not player:
@@ -4274,6 +4274,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
