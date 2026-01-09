@@ -163,9 +163,9 @@ MONSTER_PROBABILITIES = {
     "Tipo del lag": 10.0,        
     "Tipo veloz": 10.0,          
     "Puerta de Sandy": 15.0,     
-    "Tipo con sueño": 20.0,      
+    "Tipo con sueño": 10.0,      
     "User muerto": 10.0,
-    "Gato Rabioso": 10.0,
+    "Gato Rabioso": 20.0,
     "Tipo temeroso": 20.0        
 }
 
@@ -4084,6 +4084,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
