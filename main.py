@@ -47,6 +47,7 @@ class MonsterType(Enum):
     SANDY_GATE = "Puerta de Sandy"
     SLEEPY_TYPE = "Tipo con Sueño"
     DEAD_USER = "User Muerto"
+    CAT_RAGED = "Gato Rabioso"
     FEARFUL_TYPE = "Tipo Temeroso"
 
 class BattleEffect(Enum):
@@ -163,7 +164,8 @@ MONSTER_PROBABILITIES = {
     "Tipo veloz": 10.0,          
     "Puerta de Sandy": 15.0,     
     "Tipo con sueño": 20.0,      
-    "User muerto": 20.0,         
+    "User muerto": 10.0,
+    "Gato Rabioso": 10.0,
     "Tipo temeroso": 20.0        
 }
 
@@ -180,6 +182,7 @@ MONSTERS = {
     "Puerta de Sandy": Monster("Puerta de Sandy", MonsterType.SANDY_GATE, 50, 1, 2, 40),
     "Tipo con sueño": Monster("Tipo con sueño", MonsterType.SLEEPY_TYPE, 20, 1, 5, 25, BattleEffect.SLEEP, 0.4),
     "User muerto": Monster("User muerto", MonsterType.DEAD_USER, 8, 1, 5, 10),
+    "Gato Rabioso": Monster("Gato Rabioso", MonsterType.CAT_RAGED, 25, 1, 4, 10),
     "Tipo temeroso": Monster("Tipo temeroso", MonsterType.FEARFUL_TYPE, 8, 1, 5, 25, BattleEffect.FEAR, 0.4)
 }
 
@@ -4081,6 +4084,7 @@ if __name__ == "__main__":
         print("💡 Verifica tu token en el archivo .env")
     except Exception as e:
         print(f"❌ ERROR: {e}")
+
 
 
 
